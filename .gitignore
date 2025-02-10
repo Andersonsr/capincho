@@ -28,5 +28,6 @@ opt.yaml
 configs
 gapAnalysis/.git
 gapAnalysis/__pycache__
+gapAnalysis/hard_coded.py
 test
 CLIP-LoRA

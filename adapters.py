@@ -85,21 +85,22 @@ class MixerAdapter(nn.Module):
 
         image_features = self.uniAdapter.forward(original_image_features)
         text_features = self.uniAdapter.forward(original_text_features)
+
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
-        image_logits = (image_features @ original_image_features.T) * (self.logit_scale.exp())
-        text_logits = (text_features @ original_image_features.T) * (self.logit_scale.exp())
-        return image_logits, text_logits
+
+        logits = (image_features @ text_features.T) * (self.logit_scale.exp())
+        return logits
 
     def train_epoch(self, train_loader, optim):
         self.train()
         epoch_losses = []
         for batch in train_loader:
             optim.zero_grad()
-            i_logits, t_logits = self.forward(batch)
+            logits = self.forward(batch)
             targets = torch.arange(len(batch['image_embeddings'])).to(device)
-            i_loss = nn.CrossEntropyLoss()(i_logits, targets)
-            t_loss = nn.CrossEntropyLoss()(t_logits, targets)
+            t_loss = nn.CrossEntropyLoss()(logits.T, targets)
+            i_loss = nn.CrossEntropyLoss()(logits, targets)
             loss = i_loss + t_loss
             loss.backward()
             optim.step()
@@ -111,10 +112,10 @@ class MixerAdapter(nn.Module):
         epoch_losses = []
 
         for batch in val_loader:
-            i_logits, t_logits = self.forward(batch)
+            logits = self.forward(batch)
             targets = torch.arange(len(batch['image_embeddings'])).to(device)
-            i_loss = nn.CrossEntropyLoss()(i_logits, targets)
-            t_loss = nn.CrossEntropyLoss()(t_logits, targets)
+            i_loss = nn.CrossEntropyLoss()(logits, targets)
+            t_loss = nn.CrossEntropyLoss()(logits.T, targets)
             loss = i_loss + t_loss
             epoch_losses.append(loss.detach().cpu())
         return np.mean(epoch_losses)

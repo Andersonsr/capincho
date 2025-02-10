@@ -3,7 +3,7 @@ import os
 import pickle
 import json
 import torch
-from adapters import ContrastiveResidualAdapter, SigAdapter
+from adapters import ContrastiveResidualAdapter, SigAdapter, MixerAdapter
 from embeddingsDataset import COCODataset
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "")
@@ -29,6 +29,7 @@ def adapt_features(model,
         # print(data['image_id'])
         with open(save_path, 'wb') as f:
             pickle.dump(data, f)
+            print('Saved')
 
 
 if __name__ == '__main__':
@@ -47,10 +48,13 @@ if __name__ == '__main__':
         model = ContrastiveResidualAdapter(config['embedding_dim'], config['alpha'], logit_scale,
                                            config['learnable_alpha'])
 
-    else:
+    elif config['adapter'] == 'sig':
         logit_bias = config['bias'] * torch.ones([])
         model = SigAdapter(config['embedding_dim'], config['alpha'], logit_bias, logit_scale,
                            config['multiple_positives'], config['use_bias'], )
+
+    elif config['adapter'] == 'mixer':
+        model = MixerAdapter(config['input_dim'], config['alpha'], logit_scale, config['learnable_alpha'])
 
     checkpoint = torch.load(config['checkpoint_path'])
     model.load_state_dict(checkpoint['model_state_dict'])

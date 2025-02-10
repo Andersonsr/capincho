@@ -69,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('--multiple_positives', action='store_true',
                         help='use multiple positives per batch in sig adapter', default=False)
     parser.add_argument('--batch_size', type=int, default=400, help='batch size')
-    parser.add_argument('--embedding_dim', type=int, default=768, help='embedding dimension')
+    parser.add_argument('--input_dim', type=int, default=768, help='embedding input dimension')
     parser.add_argument('--learnable_alpha', action='store_true', help='learnable alpha', default=False)
     parser.add_argument('--save_path', type=str, required=True, help='path to save outputs')
     parser.add_argument('--patience', type=int, default=-1, help='early stopping patience, '
@@ -78,6 +78,8 @@ if __name__ == '__main__':
     parser.add_argument('--best', action='store_true', help='restore best model if using early stopping', default=False)
     parser.add_argument('--delta', type=float, help='minimal improvement for early stopping', default=0.01,)
     parser.add_argument('--epochs', type=int, default=200, help='number training of epochs')
+    parser.add_argument('--temperature_correction', default=1, type=float,
+                        help='multiplicative factor for temperature correction')
     args = parser.parse_args()
 
     if not os.path.exists(args.save_path):
@@ -91,18 +93,18 @@ if __name__ == '__main__':
     foundation = model_dict[args.model](device)
     foundation.load_model()
 
-    logit_scale = foundation.backbone.logit_scale
+    logit_scale = foundation.backbone.logit_scale * args.temperature_correction
     bias = torch.ones([]) * args.bias
 
     if args.adapter == 'sig':
-        model = SigAdapter(args.embedding_dim, args.alpha, bias, logit_scale, use_logit_bias=args.use_bias,
+        model = SigAdapter(args.input_dim, args.alpha, bias, logit_scale, use_logit_bias=args.use_bias,
                            multi_positive=args.multiple_positives,)
 
     elif args.adapter == 'contrastive':
-        model = ContrastiveResidualAdapter(args.embedding_dim, args.alpha, logit_scale, args.learnable_alpha, )
+        model = ContrastiveResidualAdapter(args.input_dim, args.alpha, logit_scale, args.learnable_alpha, )
 
     else:
-        model = MixerAdapter(args.embedding_dim, args.alpha, logit_scale, args.learnable_alpha, )
+        model = MixerAdapter(args.input_dim, args.alpha, logit_scale, args.learnable_alpha, )
 
     model.to(device)
     run_training(args.save_path, args.batch_size, args.embeddings, model, args.epochs, args.lr, args.patience,

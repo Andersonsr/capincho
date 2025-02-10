@@ -63,7 +63,7 @@ class CaptioningDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = CaptioningDataset(f'embeddings/coco_openclip_train.pkl', text_only=True)
+    dataset = CaptioningDataset(f'embeddings/foundation/coco_openclip_train.pkl', text_only=True)
     # print(len(dataset))
     # print(dataset[:]['embeddings'])
     # print(dataset['embeddings'])

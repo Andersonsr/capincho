@@ -12,7 +12,8 @@ from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
 
 if __name__ == '__main__':
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # print(f'device used: {device}')
     parser = argparse.ArgumentParser()
     parser.add_argument('--experiment', type=str, default='experiments/opt-350m-coco.json',
                         help='experiment path')

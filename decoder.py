@@ -174,7 +174,7 @@ def model_from_json(json_file, device):
 
 if '__main__' == __name__:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dataset = CaptioningDataset('embeddings/coco_openclip_val.pkl')
+    dataset = CaptioningDataset('embeddings/foundation/coco_openclip_val.pkl')
     loader = dataset.get_loader()
 
     model = model_from_json('experiments/t5-base_openclip_ft.json', device)

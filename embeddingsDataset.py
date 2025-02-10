@@ -39,8 +39,8 @@ class COCODataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = COCODataset('embeddings/coco_openclip_val.pkl')
-    dataset2 = COCODataset('embeddings/coco_openclip_adapter_val.pkl')
+    dataset = COCODataset('embeddings/foundation/coco_openclip_val.pkl')
+    dataset2 = COCODataset('embeddings/adapted/coco_openclip_adapter_val.pkl')
 
     # print(len(dataset[:]['image_embeddings']), len(dataset[:]['texts_embeddings']), len(dataset[:]['captions']))
     # print(len(dataset2[:]['image_embeddings']), len(dataset2[:]['texts_embeddings']), len(dataset2[:]['captions']))

@@ -22,8 +22,8 @@ if __name__ == '__main__':
                   'openclip': foundation_models.OpenCLIP,
                   'capivara': foundation_models.Capivara}
     # model init
-    model = model_dict[args.model](device, download_root=args.download_root)
-    model.load_model()
+    model = model_dict[args.model](device)
+    model.load_model(download_root=args.download_root)
     model.backbone.eval()
 
     df = pd.read_excel(args.path)

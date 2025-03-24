@@ -43,8 +43,8 @@ class Model(ABC):
 
 
 class CLIP(Model):
-    def load_model(self, encoder='ViT-L/14'):
-        self.backbone, self.vision_preprocess = clip.load(encoder, device=self.device)
+    def load_model(self, encoder='ViT-L/14', download_root='~/.cache/clip'):
+        self.backbone, self.vision_preprocess = clip.load(encoder, device=self.device, download_root=download_root)
         self.language_preprocess = clip.tokenize
 
     def visual_embedding(self, image_path):
@@ -59,7 +59,7 @@ class CLIP(Model):
 
 
 class OpenCoCa(Model):
-    def visual_embedding(self, image_path):
+    def visual_embedding(self, image_path, ):
         image = Image.open(image_path).convert("RGB")
         image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
         return self.backbone.encode_image(image)
@@ -71,7 +71,7 @@ class OpenCoCa(Model):
 
         return self.backbone.encode_text(text)
 
-    def load_model(self):
+    def load_model(self, download_root='~/.cache/clip'):
         self.backbone, _, self.vision_preprocess = open_clip.create_model_and_transforms(
             model_name="coca_ViT-L-14",
             pretrained="laion2B-s13B-b90k",
@@ -107,7 +107,7 @@ class OpenCLIP(Model):
         text = self.language_preprocess(text)
         return self.backbone.encode_text(text.to(self.device))
 
-    def load_model(self):
+    def load_model(self,  download_root='~/.cache/clip'):
         self.backbone, _, self.vision_preprocess = open_clip.create_model_and_transforms(
             model_name="ViT-L-14",
             pretrained="laion2b_s32b_b82k",

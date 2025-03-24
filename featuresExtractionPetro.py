@@ -11,7 +11,8 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, required=True, help='path to xlsx file with text and ids')
     parser.add_argument('--model', type=str, required=True, help='model to use for feature extraction',
                         choices=['clip', 'openclip', 'coca'])
-
+    parser.add_argument('--download_root', type=str, default='~/.cache/clip',
+                        help='folder to download and load models from')
     args = parser.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "")
 
@@ -21,7 +22,7 @@ if __name__ == '__main__':
                   'openclip': foundation_models.OpenCLIP,
                   'capivara': foundation_models.Capivara}
     # model init
-    model = model_dict[args.model](device)
+    model = model_dict[args.model](device, download_root=args.download_root)
     model.load_model()
     model.backbone.eval()
 

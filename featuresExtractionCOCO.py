@@ -38,6 +38,7 @@ if __name__ == '__main__':
 
         ann = coco.loadAnns(coco.getAnnIds(ids[i]))
         texts = [e['caption'] for e in ann]
+
         text_embeds = model.language_embedding(texts[:5])
         data['text_embeddings'].append(text_embeds.detach().cpu())
         data['captions'].append(texts[:5])

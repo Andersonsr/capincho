@@ -33,9 +33,9 @@ if __name__ == '__main__':
     for i, row in df.iterrows():
         id = row['cd_guid']
         vis_embed = model.visual_embedding(f'{args.root}/{id}.png')
-        txt_embed = model.text_embedding(row['text'])
-        text_embeddings.append(txt_embed)
-        image_embeddings.append(vis_embed)
+        txt_embed = model.language_embedding(row['text'])
+        text_embeddings.append(txt_embed.detach().cpu())
+        image_embeddings.append(vis_embed.detach().cpu())
 
     data = {'captions': df['text'].tolist(),
             'image_id': df['cd_guid'].tolist(),

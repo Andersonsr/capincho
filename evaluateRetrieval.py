@@ -11,7 +11,7 @@ try:
 except ImportError:
     print('open_clip is not available')
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def evaluate_image_text(path, temperature, n=5, mode='one'):

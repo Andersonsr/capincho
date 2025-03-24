@@ -1,8 +1,7 @@
 import torch
-from PIL import Image
+from PIL import Image, ImageFile
 from abc import ABC, abstractmethod
 import clip
-from huggingface_hub import hf_hub_download
 
 try:
     import open_clip
@@ -16,6 +15,10 @@ try:
     from capivara.src.utils.capivara_utils import download_pretrained_from_hf
 except ImportError:
     print('Capivara not available')
+
+# handling big images
+Image.MAX_IMAGE_PIXELS = 999999999
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class Model(ABC):
     def __init__(self, device):

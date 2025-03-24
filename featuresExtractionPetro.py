@@ -14,7 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--download_root', type=str, default='~/.cache/clip',
                         help='folder to download and load models from')
     args = parser.parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # models dict
     model_dict = {'coca': foundation_models.OpenCoCa,

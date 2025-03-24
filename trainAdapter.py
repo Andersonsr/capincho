@@ -11,7 +11,7 @@ import foundation_models
 from embeddingsDataset import COCODataset
 from earlyStopping import EarlyStopping
 from util import plot_curves
-device = torch.device("cuda:0" if torch.cuda.is_available() else "")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def run_training(save_path, batch_size, dataset, model, epochs, lr, patience, delta, restore_best=False):

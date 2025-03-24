@@ -1,8 +1,8 @@
 import torch
+from embeddingsDataset import COCODataset
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 from mapping import Mapper
-from captioningDataset import CaptioningDataset
 import math
 import copy
 from transformers import T5Model, T5ForConditionalGeneration
@@ -15,9 +15,10 @@ except ImportError:
 
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=True, variance=0.016,
-                 dimension=768):
+                 dimension=768, collapse=None, normalize=True):
         super(Decoder, self).__init__()
         self.device = device
+        print('decoder device {}'.format(device))
         if 'opt' in model_name:
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
@@ -36,81 +37,70 @@ class Decoder(nn.Module):
         self.prefix_length = prefix_length
         self.fp = precision
         self.mapper = Mapper(dimension, self.hidden_size, self.prefix_length).to(dtype=precision)
+        self.collapse = collapse
+        self.normalize = normalize
 
         if self.device:
             self.model.to(self.device)
             self.mapper.to(self.device)
             self.embeddings_layer.to(self.device)
 
-    def generate(self, prompt, stochastic=False, max_tokens=50, seed=32):
-        if stochastic:
-            set_seed(seed)
-        if self.device:
-            input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device)
-        else:
-            input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids
-        generated_ids = self.model.generate(input_ids, do_sample=stochastic, max_new_tokens=max_tokens, )
-        return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=False)
-
     def caption(self, embeddings, stochastic=False, max_tokens=50, seed=32):
         if stochastic:
             set_seed(seed)
-        embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-        sos = torch.tensor([2]).to(dtype=torch.long)
-        if self.device:
-            sos = sos.to(self.device)
-        bos = self.embeddings_layer(sos).unsqueeze(0)
+        if self.normalize:
+            embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
+        if self.collapse is not None:
+            embeddings = embeddings - self.collapse
+
+        # id do token de inicio de frase
+        sos = torch.ones((embeddings.shape[0], 1)).to(dtype=torch.long) * 2
 
         if self.device:
-            bos = bos.to(self.device)
+            sos = sos.to(self.device)
+        sos = self.embeddings_layer(sos)
+
+        if self.device:
+            sos = sos.to(self.device)
             embeddings = embeddings.to(self.device)
 
         prefix = self.mapper(embeddings.to(dtype=self.fp)).view(-1, self.prefix_length, self.hidden_size)
-        prefix = torch.concat([bos, prefix], dim=1)
+        prefix = torch.concat([sos, prefix], dim=1)
         generated_ids = self.model.generate(do_sample=stochastic, max_new_tokens=max_tokens, inputs_embeds=prefix)
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     def forward(self, batch):
-        model = 'opt'
-        if type(self.model) == T5ForConditionalGeneration:
-            model = 't5'
-
         embeddings = batch['embeddings'].to(dtype=self.fp)
-        embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-
         captions = batch['captions']
+
         if self.add_noise:
             embeddings = self.noise_injection(embeddings)
         if self.device:
             embeddings = embeddings.to(self.device)
+        if self.normalize:
+            embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
+        if self.collapse is not None:
+            embeddings = embeddings - embeddings
 
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)
-        # print(prefix_tokens.shape, embeddings.shape, captions_emb.shape)
 
-        # [batch, sos + prefix + caption, d_model]
-        if model == 'opt':
-            captions_emb = self.get_input_embeds(captions).to(dtype=self.fp)
-            if self.device:
-                captions_emb = captions_emb.to(self.device)
-            if len(captions_emb.shape) == 2:
-                captions_emb = captions_emb.unsqueeze(0)
-            # print(captions_emb.shape, prefix_tokens.shape)
-            input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
+        # final shape [batch, sos + prefix + caption, d_model]
+        captions_emb = self.get_input_embeds(captions).to(dtype=self.fp)
 
-        elif model == 't5':
-            eos = torch.ones((prefix_tokens.shape[0], 1), dtype=torch.long)
-            if self.device:
-                eos = eos.to(self.device)
+        if self.device:
+            captions_emb = captions_emb.to(self.device)
+        if len(captions_emb.shape) == 2:
+            captions_emb = captions_emb.unsqueeze(0)
 
-            eos = self.embeddings_layer(eos)
-            # [batch, learned embeds + sos, d_model]
-            input_emb = torch.concat([prefix_tokens, eos], dim=1).to(self.fp)
-
-        labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
-        labels[labels == self.tokenizer.pad_token_id] = -100
+        input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
 
         # opt ignores -100 labels during loss computation
-        ignore = torch.ones(labels.shape[0], self.prefix_length + 1) * -100
+        labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
+        # ignore padding tokens
+        labels[labels == self.tokenizer.pad_token_id] = -100
+        # ignore prefix
+        ignore = torch.ones(input_emb.shape[0], self.prefix_length + 1) * -100
+
         if self.device:
             labels = labels.to(self.device)
             ignore = ignore.to(self.device)
@@ -169,16 +159,23 @@ def model_from_json(json_file, device):
 
     checkpoint = torch.load(config['checkpoint_path'])
     decoder.load_state_dict(checkpoint['model_state_dict'])
+    decoder.normalize = config['normalize']
+    decoder.collapse = config['collapse']
     return decoder
 
 
+# TODO: TESTAR O PREPARE_BATCH DEPOIS QUE TERMINAR O EVAL DO ANTERIOR, TEXT_ONLY E NAO
 if '__main__' == __name__:
+    from trainDecoder import prepare_batch
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dataset = CaptioningDataset('embeddings/foundation/coco_openclip_val.pkl')
-    loader = dataset.get_loader()
+    dataset = COCODataset('embeddings/foundation/openclip_coco_val.pkl')
+    loader, indices = dataset.get_loader(batch_size=16)
 
-    model = model_from_json('experiments/t5-base_openclip_ft.json', device)
+    model = model_from_json('results/decoders/openclip_vis/experiment.json', device)
     for batch in loader:
+        print(batch['text_embeddings'].shape)
+        batch = prepare_batch(batch, True, device)
+        print(batch['embeddings'].shape)
         model(batch)
         break
 

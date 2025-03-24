@@ -8,23 +8,25 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class ContrastiveResidualAdapter(nn.Module):
-    def __init__(self, in_dim, initial_residual_ratio, initial_logit_scale, trainable_residual_ratio=True, logit_norm=False):
+    def __init__(self, in_dim, initial_residual_ratio, initial_logit_scale, trainable_residual_ratio=True,
+                 frozen_text=False):
         super(ContrastiveResidualAdapter, self).__init__()
         self.imageAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
-        self.textAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
+        if not frozen_text:
+            self.textAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
         self.logit_scale = nn.Parameter(initial_logit_scale)
-        self.logit_norm = logit_norm
 
     def forward(self, batch):
         image_features = batch['image_embeddings'].to(device, torch.float32).squeeze()
-        text_features = batch['texts_embeddings'].to(device, torch.float32)
+        text_features = batch['text_embeddings'].to(device, torch.float32)
         c = random.randint(0, text_features.shape[1]-1)
         text_features = text_features[:, c, :]
-        # print(text_features.shape, image_features.shape)
 
         # resized features logits
         image_features = self.imageAdapter.forward(image_features)
-        text_features = self.textAdapter.forward(text_features)
+        if not self.frozen_text:
+            text_features = self.textAdapter.forward(text_features)
+
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
         return (image_features @ text_features.T) * (self.logit_scale.exp())
@@ -36,7 +38,6 @@ class ContrastiveResidualAdapter(nn.Module):
     def text_projection(self, embeddings):
         self.eval()
         return self.textAdapter(embeddings.to(device, torch.float32))
-
 
     def train_epoch(self, train_loader, optim):
         self.train()
@@ -67,66 +68,6 @@ class ContrastiveResidualAdapter(nn.Module):
             loss = i_loss + t_loss
             epoch_losses.append(loss.detach().cpu())
         return np.mean(epoch_losses)
-
-
-class MixerAdapter(nn.Module):
-    def __init__(self, in_dim, initial_residual_ratio, initial_logit_scale, trainable_residual_ratio=False,
-                 logit_norm=False):
-        super(MixerAdapter, self).__init__()
-        self.uniAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
-        self.logit_scale = nn.Parameter(initial_logit_scale)
-        self.logit_norm = logit_norm
-
-    def forward(self, batch):
-        original_image_features = batch['image_embeddings'].to(device, torch.float32).squeeze()
-        original_text_features = batch['texts_embeddings'].to(device, torch.float32)
-        c = random.randint(0, original_text_features.shape[1] - 1)
-        original_text_features = original_text_features[:, c, :]
-
-        image_features = self.uniAdapter.forward(original_image_features)
-        text_features = self.uniAdapter.forward(original_text_features)
-
-        image_features = image_features / image_features.norm(dim=1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=1, keepdim=True)
-
-        logits = (image_features @ text_features.T) * (self.logit_scale.exp())
-        return logits
-
-    def train_epoch(self, train_loader, optim):
-        self.train()
-        epoch_losses = []
-        for batch in train_loader:
-            optim.zero_grad()
-            logits = self.forward(batch)
-            targets = torch.arange(len(batch['image_embeddings'])).to(device)
-            t_loss = nn.CrossEntropyLoss()(logits.T, targets)
-            i_loss = nn.CrossEntropyLoss()(logits, targets)
-            loss = i_loss + t_loss
-            loss.backward()
-            optim.step()
-            epoch_losses.append(loss.detach().cpu())
-        return np.mean(epoch_losses)
-
-    def val_epoch(self, val_loader):
-        self.eval()
-        epoch_losses = []
-
-        for batch in val_loader:
-            logits = self.forward(batch)
-            targets = torch.arange(len(batch['image_embeddings'])).to(device)
-            i_loss = nn.CrossEntropyLoss()(logits, targets)
-            t_loss = nn.CrossEntropyLoss()(logits.T, targets)
-            loss = i_loss + t_loss
-            epoch_losses.append(loss.detach().cpu())
-        return np.mean(epoch_losses)
-
-    def image_projection(self, embeddings):
-        self.eval()
-        return self.uniAdapter(embeddings.to(device, torch.float32))
-
-    def text_projection(self, embeddings):
-        self.eval()
-        return self.uniAdapter(embeddings.to(device, torch.float32))
 
 
 class SigAdapter(nn.Module):
@@ -208,9 +149,10 @@ class SigAdapter(nn.Module):
 
 
 if __name__ == '__main__':
-    adapter = SigAdapter(768, 0.3, torch.ones([])*-10, torch.ones([])*4, True, ).to(device)
+    logit_scale = torch.ones([]) * 3
+    adapter = ContrastiveResidualAdapter(768, 0.3, logit_scale).to(device)
     dataset = 'coco_openCLIP'
-    val_dataset = COCODataset(f'embeddings/{dataset}_val.pkl')
+    val_dataset = COCODataset(f'embeddings/foundation/openclip_coco_val.pkl')
     val_loader, val_indices = val_dataset.get_loader(shuffle=False, batch_size=20)
     for batch in val_loader:
         adapter.forward(batch)

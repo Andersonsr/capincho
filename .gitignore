@@ -26,8 +26,6 @@ config.yaml
 textDatasets
 opt.yaml
 configs
-gapAnalysis/.git
-gapAnalysis/__pycache__
-gapAnalysis/hard_coded.py
+gapAnalysis
 test
 CLIP-LoRA

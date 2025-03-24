@@ -1,5 +1,5 @@
 import argparse
-import os
+from tqdm import tqdm
 import pickle
 import json
 import torch
@@ -14,22 +14,21 @@ def adapt_features(model,
                    save_path='datasets_torchvision/embeddings/coco_MPT.pkl',):
 
     dataset = COCODataset(embeddings_path)
-    # single batch
-    loader, indices = dataset.get_loader(batch_size=len(dataset), shuffle=False)
-    for batch in loader:
-        images = model.image_projection(batch['image_embeddings']).detach().cpu()
-        texts = model.text_projection(batch['texts_embeddings']).detach().cpu()
+    images = []
+    texts = []
+    for i in tqdm(range(len(dataset))):
+        images.append(model.image_projection(dataset.image_embeddings[i]).detach().cpu())
+        texts.append(model.text_projection(dataset.text_embeddings[i]).detach().cpu())
 
-        data = {'image_embeddings': images,
-                'texts_embeddings': texts,
-                'image_id': dataset[:]['image_id'],
-                'image_name': dataset[:]['image_name'],}
+    data = {'image_embeddings': images,
+            'text_embeddings': texts,
+            'image_id': dataset[:]['image_id'],
+            'image_name': dataset[:]['image_name'],
+            'captions': dataset[:]['captions']}
 
-
-        # print(data['image_id'])
-        with open(save_path, 'wb') as f:
-            pickle.dump(data, f)
-            print('Saved')
+    with open(save_path, 'wb') as f:
+        pickle.dump(data, f)
+        print('Saved')
 
 
 if __name__ == '__main__':
@@ -45,7 +44,7 @@ if __name__ == '__main__':
     logit_scale = config['logit_scale'] * torch.ones([])
 
     if config['adapter'] == 'contrastive':
-        model = ContrastiveResidualAdapter(config['embedding_dim'], config['alpha'], logit_scale,
+        model = ContrastiveResidualAdapter(config['input_dim'], config['alpha'], logit_scale,
                                            config['learnable_alpha'])
 
     elif config['adapter'] == 'sig':

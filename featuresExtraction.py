@@ -28,10 +28,9 @@ if __name__ == '__main__':
     ids = coco.getImgIds()
     imgs = coco.loadImgs(ids)
 
-    data = {'image_name': [], 'image_id': [], 'image_embeddings': [], 'texts_embeddings': [], }
+    data = {'image_name': [], 'image_id': [], 'image_embeddings': [], 'text_embeddings': [], 'captions': []}
     for i, image in enumerate(tqdm(imgs)):
         data['image_name'].append(image['file_name'])
-
         data['image_id'].append(ids[i])
         img_embeds = model.visual_embedding('datasets_torchvision/coco_2017/{}2017/{}'.format(args.split,
                                                                                               image['file_name']))
@@ -40,7 +39,8 @@ if __name__ == '__main__':
         ann = coco.loadAnns(coco.getAnnIds(ids[i]))
         texts = [e['caption'] for e in ann]
         text_embeds = model.language_embedding(texts[:5])
-        data['texts_embeddings'].append(text_embeds.detach().cpu())
+        data['text_embeddings'].append(text_embeds.detach().cpu())
+        data['captions'].append(texts[:5])
 
     with open(args.save_path, 'wb') as f:
         pickle.dump(data, f)

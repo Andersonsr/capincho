@@ -4,7 +4,7 @@ import os.path
 import pickle
 import time
 import torch
-from adapters import ContrastiveResidualAdapter, SigAdapter, MixerAdapter
+from adapters import ContrastiveResidualAdapter, SigAdapter
 from tqdm import tqdm
 from torch.optim import Adam
 import foundation_models
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='openclip', choices=['openclip', 'clip', 'coca'],
                         help='foundation model')
-    parser.add_argument('--adapter', type=str, default='contrastive', choices=['contrastive', 'sig', 'mixer'],
+    parser.add_argument('--adapter', type=str, default='contrastive', choices=['contrastive', 'sig'],
                         help='adapter type')
     parser.add_argument('--alpha', type=float, default=0.3, help='residual learning rate')
     parser.add_argument('--bias', type=float, default=-10., help='logit bias, sig adapter')
@@ -78,8 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--best', action='store_true', help='restore best model if using early stopping', default=False)
     parser.add_argument('--delta', type=float, help='minimal improvement for early stopping', default=0.01,)
     parser.add_argument('--epochs', type=int, default=200, help='number training of epochs')
-    parser.add_argument('--temperature_correction', default=1, type=float,
-                        help='multiplicative factor for temperature correction')
+    parser.add_argument('--frozen_text', action='store_true', help='use frozen text encoder', default=False)
     args = parser.parse_args()
 
     if not os.path.exists(args.save_path):
@@ -93,18 +92,17 @@ if __name__ == '__main__':
     foundation = model_dict[args.model](device)
     foundation.load_model()
 
-    logit_scale = foundation.backbone.logit_scale * args.temperature_correction
-    bias = torch.ones([]) * args.bias
+    logit_scale = foundation.backbone.logit_scale
 
     if args.adapter == 'sig':
-        model = SigAdapter(args.input_dim, args.alpha, bias, logit_scale, use_logit_bias=args.use_bias,
+        model = SigAdapter(args.input_dim, args.alpha, args.bias, logit_scale, use_logit_bias=args.use_bias,
                            multi_positive=args.multiple_positives,)
 
     elif args.adapter == 'contrastive':
-        model = ContrastiveResidualAdapter(args.input_dim, args.alpha, logit_scale, args.learnable_alpha, )
-
+        model = ContrastiveResidualAdapter(args.input_dim, args.alpha, logit_scale, args.learnable_alpha,
+                                           frozen_text=args.frozen_text)
     else:
-        model = MixerAdapter(args.input_dim, args.alpha, logit_scale, args.learnable_alpha, )
+        raise ValueError('supported adapter types are sig, contrastive')
 
     model.to(device)
     run_training(args.save_path, args.batch_size, args.embeddings, model, args.epochs, args.lr, args.patience,

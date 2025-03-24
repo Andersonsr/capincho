@@ -11,6 +11,7 @@ from tqdm import tqdm
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
 
+
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # print(f'device used: {device}')
@@ -23,12 +24,19 @@ if __name__ == '__main__':
     parser.add_argument('--num_images', '-n', type=int, default=10,
                         help='number of images to evaluate in qualitative evaluation')
     parser.add_argument('--load_results', action='store_true', help='load saved results')
+    parser.add_argument('--collapse', action='store_true', help='collapse embeddings', default=False)
+
     args = parser.parse_args()
 
     decoder = model_from_json(args.experiment, device)
+    decoder.add_noise = False
     decoder.eval()
-
     embeddings = COCODataset(path=args.embeddings, n_captions=1)
+    means = torch.zeros(len(embeddings))
+    if args.collapse:
+        train_data = COCODataset(path=args.embeddings.replace('val', 'train'), n_captions=1)
+        means = train_data.get_image_means()
+        decoder.collapse = means
 
     print('\n Evaluating captioning \n')
     coco = COCO('datasets_torchvision/coco_2017/annotations/captions_val2017.json')
@@ -66,11 +74,12 @@ if __name__ == '__main__':
         if not args.load_results:
             print(f'generating captions at {name}')
             data = embeddings[:]
-            captions = [decoder.caption(torch.tensor(e, dtype=decoder.fp, device=device).squeeze(0))[0] for e in tqdm(data['image_embeddings'], total=len(data['image_embeddings']))]
+            embeddings = data['image_embeddings']
+
+            captions = [decoder.caption(e)[0] for e in tqdm(embeddings)]
             results = []
-            print(captions)
             for i in range(len(captions)):
-                results.append({'image_id': embeddings[i]['image_id'], 'caption': captions[i]})
+                results.append({'image_id': data['image_id'][i], 'caption': captions[i]})
 
             with open(name, 'w') as f:
                 json.dump(results, f, indent=2)

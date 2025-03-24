@@ -105,6 +105,11 @@ def concat_images():
     cv2.imwrite('final vit.png', final)
 
 
+def count_mimic():
+    files = glob.glob('/mnt/d/datasets/mimic-cxr-jpg/2.1.0/files/p10/*')
+
+    print(len(files))
+
 def generate_dummy_texts(n=36):
     import string
     import random
@@ -116,7 +121,4 @@ def generate_dummy_texts(n=36):
 
 
 if __name__ == '__main__':
-    for file in glob.glob('textDatasets/*'):
-        with open(file, 'r') as f:
-            print(f'{file} size: {len(f.readlines())}')
-
+    count_mimic()

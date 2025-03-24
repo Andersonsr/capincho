@@ -41,8 +41,6 @@ class CaptioningDataset(Dataset):
         else:
             self.embeddings = embeddings['image_embeddings']
 
-        print(len(self.embeddings), len(self.captions))
-
     def __len__(self):
         return len(self.embeddings)
 
@@ -61,17 +59,30 @@ class CaptioningDataset(Dataset):
         loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
         return loader
 
+    def get_means(self):
+        # print(self.embeddings.shape)
+        means = torch.zeros(1, self.embeddings.shape[1])
+        for e in self.embeddings:
+            means += e / e.norm(dim=-1)
+        return means / self.embeddings.shape[0]
+
+    def get_std(self):
+        return torch.std(self.embeddings, dim=0)
+
 
 if __name__ == '__main__':
     dataset = CaptioningDataset(f'embeddings/foundation/coco_openclip_train.pkl', text_only=True)
+    means = dataset.get_means()
+    print(means.shape)
     # print(len(dataset))
     # print(dataset[:]['embeddings'])
     # print(dataset['embeddings'])
+    print(dataset[:]['captions'][0])
+    loader = dataset.get_loader()
     # print(dataset[:]['captions'])
-    # loader = dataset.get_loader()
-    # print(dataset[:]['captions'])
-    # for batch in loader:
-        # print(len(batch['captions']))
+    for batch in loader:
+        print(len(batch['captions']))
+
     #     print(batch['embeddings'].shape, len(batch['captions']))
     # with open('embeddings/coco_openclip_train.pkl', 'rb') as f:
     #     embeddings = pickle.load(f)

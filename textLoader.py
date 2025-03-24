@@ -17,7 +17,11 @@ class TextLoader(Dataset):
                 data = data[:lim]
             elif split == 'val':
                 data = data[lim:]
+
             self.texts = data['texts']
+            self.images = data['images']
+
+
         else:
             with open(data_path, 'rb') as f:
                 data = pickle.load(f)
@@ -56,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', '-m', type=str, required=True, help='model name', choices=['openclip', 'clip'])
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    data = TextLoader(args.path, has_embeddings=False)
+    data = TextLoader(args.path, has_embeddings=False, split='all')
 
     if args.model == 'openclip':
         model = OpenCLIP(device)
@@ -66,14 +70,16 @@ if __name__ == '__main__':
         model = CLIP(device)
         model.load_model()
 
-    embeddings = []
+    embeddings_text = []
+    embeddings_image = []
     texts = []
     for batch in data.get_loader(batch_size=2):
         with torch.no_grad():
-            embeddings += model.language_embedding(batch['captions']).detach().cpu().tolist()
+            embeddings_text += model.language_embedding(batch['captions']).detach().cpu().tolist()
+            embeddings_image += model.language_embedding(batch['image']).detach().cpu().tolist()
             texts += batch['captions']
 
-    new_dict = {'captions': texts, 'embeddings': embeddings}
+    new_dict = {'captions': texts, 'text_embeddings': embeddings_text, 'image_embeddings': embeddings_image}
     # print(embeddings)
     # print(texts)
     with open(args.output, 'wb') as f:

@@ -70,8 +70,3 @@ def split_sentence(sentence, limit):
 
     return new_text
 
-
-if __name__ == '__main__':
-    sentence = 'a very long sentence should be placed here but i am too lazy to do it'
-    splited = split_sentence(sentence, int(400/8))
-

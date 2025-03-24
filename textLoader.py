@@ -8,6 +8,9 @@ import numpy as np
 
 
 class TextLoader(Dataset):
+    '''
+    Load xlsx for feature extraction if param has_embedding is False, load pkl with extracted features otherwise
+    '''
     def __init__(self, data_path, has_embeddings=False, split='train'):
 
         if not has_embeddings:
@@ -54,7 +57,7 @@ class TextLoader(Dataset):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='')
+    parser = argparse.ArgumentParser(description='Extract features from xlsx for image captioning')
     parser.add_argument('--path', '-p', type=str, required=True, help='path to texts xlsx')
     parser.add_argument('--output', '-o', type=str, required=True, help='output path')
     parser.add_argument('--model', '-m', type=str, required=True, help='model name', choices=['openclip', 'clip'])

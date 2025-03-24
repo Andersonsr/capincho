@@ -1,5 +1,5 @@
 import glob
-
+import cv2 as cv
 import pandas as pd
 import pickle
 import clip
@@ -48,34 +48,12 @@ def rename_column(pkl_file: str):
         pickle.dump(data_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def clip_encoders_sizes():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
-    models = clip.available_models()
-    sizes = []
-    for model in models:
-        backbone, preprocess = clip.load(model)
-        image = preprocess(Image.open("plots/projeto/top_k_acc.png")).unsqueeze(0).to(device, torch.float16)
-        summary_data = summary(backbone.visual, input_data=image, verbose=0)
-        x = re.search("Trainable params.*", str(summary_data))
-        params = x.group(0).split(' ')[-1].replace(',', '')
-        print(x.group(0))
-        sizes.append(float(params) / 1e6)
-
-    plt.figure()
-    plt.bar(models, sizes, align='center')
-    plt.title('CLIP Visual encoders learnable parameters')
-    plt.xticks(rotation=30)
-    plt.ylabel('M learnable parameters')
-    plt.tight_layout()
-    plt.show()
-
-
 def resize_image(image, size):
     h, w = image.shape[:2]
     max_d = max(h, w)
     if max_d > size:
         ratio = size / max_d
-        resized = cv2.resize(image, (int(w * ratio), int(h * ratio)))
+        resized = cv.resize(image, (int(w * ratio), int(h * ratio)))
         n_h, n_w = resized.shape[:2]
         h_delta = size - n_h
         w_delta = size - n_w
@@ -97,12 +75,12 @@ def concat_images():
     imgs = []
     for d in [1, 2, 4, 8, 16]:
         path = f'plots/t1 training/custom adapter k={d} d=1024 aircraft.png'
-        imgs.append(cv2.imread(path, cv2.IMREAD_COLOR))
+        imgs.append(cv.imread(path, cv.IMREAD_COLOR))
 
     upper = np.concatenate((np.ones_like(imgs[1]) * 255, imgs[0], imgs[1]), axis=1)
     lower = np.concatenate((imgs[2], imgs[3], imgs[4]), axis=1)
     final = np.concatenate((upper, lower), axis=0)
-    cv2.imwrite('final vit.png', final)
+    cv.imwrite('final vit.png', final)
 
 
 def count_mimic():
@@ -110,15 +88,17 @@ def count_mimic():
 
     print(len(files))
 
+
 def generate_dummy_texts(n=36):
     import string
     import random
     import pandas
-    dummy_texts = {'texts': []}
+    dummy_texts = {'text': [], 'cd_guid': []}
     for i in range(n):
-        dummy_texts['texts'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
+        dummy_texts['text'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
+        dummy_texts['cd_guid'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
     pandas.DataFrame.from_dict(dummy_texts).to_excel('dummy.xlsx')
 
 
 if __name__ == '__main__':
-    count_mimic()
+    generate_dummy_texts()

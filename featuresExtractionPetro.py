@@ -1,0 +1,48 @@
+import argparse
+import pandas as pd
+import foundation_models
+import torch
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='download and extract features from petro dataset')
+    parser.add_argument('--root', type=str, required=True, help='folder containing petro dataset images')
+    parser.add_argument('--output', type=str, required=True, help='path to save the extracted features')
+    parser.add_argument('--path', type=str, required=True, help='path to xlsx file with text and ids')
+    parser.add_argument('--model', type=str, required=True, help='model to use for feature extraction',
+                        choices=['clip', 'openclip', 'coca'])
+
+    args = parser.parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "")
+
+    # models dict
+    model_dict = {'coca': foundation_models.OpenCoCa,
+                  'clip': foundation_models.CLIP,
+                  'openclip': foundation_models.OpenCLIP,
+                  'capivara': foundation_models.Capivara}
+    # model init
+    model = model_dict[args.model](device)
+    model.load_model()
+    model.backbone.eval()
+
+    df = pd.read_excel(args.path)
+    text_embeddings = []
+    image_embeddings = []
+
+    # extraction loop
+    for i, row in df.iterrows():
+        id = row['cd_guid']
+        vis_embed = model.visual_embedding(f'{args.root}/{id}.png')
+        txt_embed = model.text_embedding(row['text'])
+        text_embeddings.append(txt_embed)
+        image_embeddings.append(vis_embed)
+
+    data = {'captions': df['text'].tolist(),
+            'image_id': df['cd_guid'].tolist(),
+            'image_embeddings': image_embeddings,
+            'text_embeddings': text_embeddings}
+
+    pd.DataFrame.from_dict(data).to_excel(args.output, index=False)
+
+
+

@@ -1,4 +1,6 @@
 import argparse
+import pickle
+
 import pandas as pd
 import foundation_models
 import torch
@@ -43,7 +45,8 @@ if __name__ == '__main__':
             'image_embeddings': image_embeddings,
             'text_embeddings': text_embeddings}
 
-    pd.DataFrame.from_dict(data).to_excel(args.output, index=False)
+    with open(args.output, 'wb') as f:
+        pickle.dump(data, f)
 
 
 

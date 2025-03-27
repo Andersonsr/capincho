@@ -5,6 +5,7 @@ from peft import LoraConfig
 from trl import SFTTrainer, SFTConfig
 from util import model_size, learnable_parameters
 import os
+import json
 import glob
 
 
@@ -85,5 +86,11 @@ if __name__ == '__main__':
     learnable_parameters(trainer.model)
 
     trainer.train(resume_from_checkpoint=args.resume)
+
+    # save model
+    os.makedirs(args.output_dir, exist_ok=True)
     trainer.save_model(args.save_dir)
-    #
+    result_dict = args.__dict__
+    with open(f'{args.save_dir}/experiment.json', 'w') as f:
+        json.dump(result_dict, f, indent=2)
+

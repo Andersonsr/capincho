@@ -48,7 +48,8 @@ class Model(ABC):
 class CLIP(Model):
     def load_model(self, encoder='ViT-L/14', download_root='~/.cache/clip'):
         self.backbone, self.vision_preprocess = clip.load(encoder, device=self.device, download_root=download_root)
-        self.language_preprocess = clip.tokenize
+
+
 
     def visual_embedding(self, image_path):
         with torch.no_grad():
@@ -120,14 +121,6 @@ class OpenCLIP(Model):
 
 
 if __name__ == "__main__":
-    from captioningDataset import CaptioningDataset
-    # model = Capivara(device="cuda:0")
-    # model.load_model()
-    #
-    # emb = model.language_embedding('texto de texto de texto de texto de')
-    # print(emb.shape)
-    # emb = model.visual_embedding('./coco retrieval one.png')
-    # print(emb.shape)
     for i in open_clip.list_pretrained():
         if 'L' in i[0]:
             print(i)

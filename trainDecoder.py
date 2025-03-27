@@ -3,7 +3,7 @@ import pickle
 import random
 import torch
 from transformers import AdamW, get_linear_schedule_with_warmup
-from embeddingsDataset import COCODataset
+from embeddingsDataset import COCODataset, PetroDataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import json

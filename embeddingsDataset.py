@@ -1,9 +1,45 @@
-
 import os.path
 import pickle
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+
+
+class PetroDataset(Dataset):
+    def __init__(self, path, split):
+        assert os.path.exists(path), '{} does not exist'.format(path)
+        data = pickle.load(open(path, 'rb'))
+        lim = int(0.9 * len(data))
+
+        if split == 'train':
+            self. text_embeddings = data['text_embeddings'][:lim]
+            self.image_embeddings = data['image_embeddings'][:lim]
+            self.captions = data['captions'][:lim]
+            self.image_id = data['image_id'][:lim]
+
+        elif split == 'val':
+            self.text_embeddings = data['text_embeddings'][lim:]
+            self.image_embeddings = data['image_embeddings'][lim:]
+            self.captions = data['captions'][lim:]
+            self.image_id = data['image_id'][lim:]
+
+        else:
+            raise ValueError('{} is not a valid split, choices = [train, val]'.format(split))
+
+    def __len__(self):
+        return len(self.captions)
+
+    def __getitem__(self, index):
+        return {'image_id': self.image_id[index],
+                'image_embeddings': self.image_embeddings[index],
+                'text_embeddings': self.text_embeddings[index],
+                'captions': self.captions[index]}
+
+    def get_loader(self, batch_size):
+        indices = np.arange(len(self.image_embeddings))
+        sampler = torch.utils.data.SequentialSampler(indices)
+        loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
+        return loader, indices
 
 
 class COCODataset(Dataset):

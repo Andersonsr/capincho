@@ -1,6 +1,6 @@
 import argparse
 import pickle
-
+from tqdm import tqdm
 import pandas as pd
 import foundation_models
 import torch
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     image_embeddings = []
 
     # extraction loop
-    for i, row in df.iterrows():
+    for i, row in tqdm(df.iterrows()):
         id = row['cd_guid']
         vis_embed = model.visual_embedding(f'{args.root}/{id}.png')
         txt_embed = model.language_embedding(row['text'])

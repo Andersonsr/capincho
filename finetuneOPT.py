@@ -5,8 +5,6 @@ from peft import LoraConfig
 from trl import SFTTrainer, SFTConfig
 from util import model_size, learnable_parameters
 import os
-import pandas as pd
-import torch
 import glob
 
 

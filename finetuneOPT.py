@@ -40,52 +40,49 @@ if __name__ == '__main__':
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, )
 
-    # shuffle data
-    # with open(args.dataset, 'r') as f:
-    #     df = pd.DataFrame.from_dict({'text': f.readlines()})
-    #     df.sample(frac=1).reset_index(drop=True)
-    #     with open('textDatasets/shuffled-petroles.txt', 'w') as f:
-    #         f.writelines(df['text'].values)
-
     test_data = load_dataset('text', data_files=args.dataset, encoding='utf8', cache_dir=args.output_dir, split='train[:10%]')
     train_data = load_dataset('text', data_files=args.dataset, encoding='utf8', cache_dir=args.output_dir, split='train[10%:]')
 
-    config = LoraConfig(
-        r=args.rank,
-        lora_alpha=args.alpha,
-        target_modules=["q_proj", "v_proj"],
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-    trainArgs = SFTConfig(
-        fp16=args.fp16,
-        logging_steps=5000,
-        logging_strategy='steps',
-        evaluation_strategy='steps',
-        learning_rate=args.lr,
-        output_dir=args.output_dir,
-        save_strategy='steps',
-        save_steps=10000,
-        per_device_train_batch_size=args.batch_size,
-        gradient_accumulation_steps=args.accumulate_grad_steps,
-        num_train_epochs=args.epochs,
-        overwrite_output_dir=True,
-        resume_from_checkpoint=check_path if args.resume else False,
-        save_total_limit=10,
-        ddp_find_unused_parameters=False,
-    )
-    trainer = SFTTrainer(
-        args.model,
-        train_dataset=train_data,
-        eval_dataset=test_data,
-        dataset_text_field="text",
-        peft_config=config,
-        args=trainArgs,
-    )
-    model_size(trainer.model)
-    learnable_parameters(trainer.model)
+    if args.lora:
+        config = LoraConfig(
+            r=args.rank,
+            lora_alpha=args.alpha,
+            target_modules=["q_proj", "v_proj"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        trainArgs = SFTConfig(
+            fp16=args.fp16,
+            logging_steps=5000,
+            logging_strategy='steps',
+            evaluation_strategy='steps',
+            learning_rate=args.lr,
+            output_dir=args.output_dir,
+            save_strategy='steps',
+            save_steps=10000,
+            per_device_train_batch_size=args.batch_size,
+            gradient_accumulation_steps=args.accumulate_grad_steps,
+            num_train_epochs=args.epochs,
+            overwrite_output_dir=True,
+            resume_from_checkpoint=check_path if args.resume else False,
+            save_total_limit=10,
+            ddp_find_unused_parameters=False,
+        )
+        trainer = SFTTrainer(
+            args.model,
+            train_dataset=train_data,
+            eval_dataset=test_data,
+            dataset_text_field="text",
+            peft_config=config,
+            args=trainArgs,
+        )
+        model_size(trainer.model)
+        learnable_parameters(trainer.model)
 
-    trainer.train(resume_from_checkpoint=args.resume)
+        trainer.train(resume_from_checkpoint=args.resume)
+
+    else:
+        raise NotImplemented('Full finetune not implemented yet, please use LoRA.')
 
     # save model
     os.makedirs(args.output_dir, exist_ok=True)

@@ -1,3 +1,4 @@
+import argparse
 import os.path
 import pickle
 import numpy as np
@@ -6,12 +7,24 @@ from torch.utils.data import Dataset
 
 
 class PetroDataset(Dataset):
-    def __init__(self, path, split):
+    def __init__(self, path, split=None, ratio=0.9):
+        '''
+        Load dataset from file and split into training or validation sets, ratio should be between 0 and 1
+        :param path: path to dataset
+        :param split: None to use the whole dataset, train or val
+        :param ratio: train ratio
+        '''
         assert os.path.exists(path), '{} does not exist'.format(path)
         data = pickle.load(open(path, 'rb'))
-        lim = int(0.9 * len(data))
+        lim = int(ratio * len(data))
 
-        if split == 'train':
+        if split is None:
+            self.text_embeddings = data['text_embeddings']
+            self.image_embeddings = data['image_embeddings']
+            self.captions = data['captions']
+            self.image_id = data['image_id']
+
+        elif split == 'train':
             self. text_embeddings = data['text_embeddings'][:lim]
             self.image_embeddings = data['image_embeddings'][:lim]
             self.captions = data['captions'][:lim]
@@ -36,6 +49,11 @@ class PetroDataset(Dataset):
                 'captions': self.captions[index]}
 
     def get_loader(self, batch_size):
+        '''
+        get torch dataloader
+        :param batch_size: batch size for the dataloader
+        :return: dataloader, indices
+        '''
         indices = np.arange(len(self.image_embeddings))
         sampler = torch.utils.data.SequentialSampler(indices)
         loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
@@ -121,7 +139,18 @@ class COCODataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = COCODataset('embeddings/foundation/openclip_coco_val.pkl')
+    parser = argparse.ArgumentParser('check output format')
+    parser.add_argument('--dataset', type=str, required=True, choices=['coco', 'petro'], help='dataset name')
+    parser.add_argument('--path', type=str, required=True, help='path to dataset')
+    args = parser.parse_args()
+
+    if args.dataset == 'coco':
+        dataset = COCODataset(args.path)
+    elif args.dataset == 'petro':
+        dataset = PetroDataset(args.path)
+    else:
+        raise ValueError('dataset not supported, choices=[petro, coco]')
+
     loader, indices = dataset.get_loader(batch_size=12)
     dataset.get_image_means()
     for batch in loader:

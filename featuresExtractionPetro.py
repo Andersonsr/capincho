@@ -14,7 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, required=True, help='model to use for feature extraction',
                         choices=['clip', 'openclip', 'coca'])
     parser.add_argument('--download_root', type=str, default='~/.cache/clip',
-                        help='folder to download and load models from')
+                        help='folder to download and load models')
     args = parser.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

@@ -152,15 +152,15 @@ if __name__ == '__main__':
         raise ValueError('dataset not supported, choices=[petro, coco]')
 
     loader, indices = dataset.get_loader(batch_size=12)
-    dataset.get_image_means()
+    # dataset.get_image_means()
     for batch in loader:
         print(batch['text_embeddings'].shape)
         print(batch['image_embeddings'].shape)
         print(len(batch['image_id']))
-        print(len(batch['image_name']))
+        # print(len(batch['image_name']))
         print(len(batch['captions']))
-        print(batch['text_embeddings'].norm(dim=-1).shape)
-        b = batch['image_embeddings'] / batch['image_embeddings'].norm(dim=-1)
+        # print(batch['text_embeddings'].norm(dim=-1).shape)
+        # b = batch['image_embeddings'] / batch['image_embeddings'].norm(dim=-1)
         break
 
 

@@ -13,7 +13,16 @@ from textLoader import TextLoader
 from util import model_size, learnable_parameters
 
 
-def prepare_batch(batch, text_only, device):
+def prepare_batch(batch, text_only, device, num_descriptions=5):
+    '''
+    Prepare the batch to be forwarded to the model
+    :param batch: batch to be processed
+    :param text_only: to use text only or not (Boolean)
+    :param device: device to use for computation
+    :param num_descriptions: total number of descriptions for each image, used to randomize the captioning
+    :return: object with keys 'caption' and 'embeddings'
+    '''
+
     if text_only:
         embeds = batch['text_embeddings']
         embeds = embeds.to(device)
@@ -25,7 +34,7 @@ def prepare_batch(batch, text_only, device):
     else:
         embeds = batch['image_embeddings']
         embeds = embeds.to(device)
-        c = random.randint(0, 4)
+        c = random.randint(0, num_descriptions-1)
         captions = [caption[c] for caption in batch['captions']]
         return {'captions': captions, 'embeddings': embeds}
 
@@ -36,13 +45,17 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # data
+    num_captions = 1
     if dataset == 'coco':
         train_data = COCODataset(f'{filename}', 5)
         val_name = filename.replace('train', 'val')
         val_data = COCODataset(f'{val_name}', 5)
-    else:
+        num_captions = 5
+    elif dataset == 'petro':
         train_data = TextLoader(f'{filename}', has_embeddings=True, split='train')
         val_data = TextLoader(f'{filename}', has_embeddings=True, split='val')
+    else:
+        raise ValueError(f'{dataset} is not a valid dataset')
 
     train_loader, indices = train_data.get_loader(batch_size=batch_size)
     val_loader, indices = val_data.get_loader(batch_size=batch_size)
@@ -84,7 +97,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         log_loss = []
         i = 0
         for batch in tqdm(train_loader):
-            batch = prepare_batch(batch, text_only, device)
+            batch = prepare_batch(batch, text_only, device, num_descriptions=num_captions)
             optim.zero_grad()
             output = decoder(batch)
             output.loss.backward()
@@ -104,7 +117,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                 decoder.eval()
                 decoder.add_noise = False
                 for val_batch in val_loader:
-                    val_batch = prepare_batch(val_batch, False, device)
+                    val_batch = prepare_batch(val_batch, False, device, num_descriptions=num_captions)
                     if collapse:
                         val_batch['embeddings'] -= train_means
 
@@ -170,7 +183,7 @@ if __name__ == '__main__':
     parser.add_argument('--noise', action='store_true', help='add noise to embeddings', default=False)
     parser.add_argument('--variance', type=float, help='variance for noise injection', default=0.016)
     parser.add_argument('--history', action='store_true', help='save epoch history', default=False)
-    parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'geo', 'cxr'], help='dataset name')
+    parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'petro', 'cxr'], help='dataset name')
     parser.add_argument('--save_path', default='/nethome/recpinfo/users/fibz/data/', help='root dir for saving results')
     parser.add_argument('--dimension', default=768, type=int, help='embedding dimension')
     parser.add_argument('--collapse', action='store_true', help='collapse embeddings', default=False)

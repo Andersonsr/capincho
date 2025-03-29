@@ -51,9 +51,11 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         val_name = filename.replace('train', 'val')
         val_data = COCODataset(f'{val_name}', 5)
         num_captions = 5
+
     elif dataset == 'petro':
-        train_data = TextLoader(f'{filename}', has_embeddings=True, split='train')
-        val_data = TextLoader(f'{filename}', has_embeddings=True, split='val')
+        train_data = PetroDataset(f'{filename}', split='train')
+        val_data = PetroDataset(f'{filename}', split='val')
+
     else:
         raise ValueError(f'{dataset} is not a valid dataset')
 

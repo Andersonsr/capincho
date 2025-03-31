@@ -98,7 +98,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     for epoch in range(epochs):
         log_loss = []
         i = 0
-        for batch in tqdm(train_loader):
+        for batch in tqdm(train_loader, total=len(train_loader)):
             batch = prepare_batch(batch, text_only, device, num_descriptions=num_captions)
             optim.zero_grad()
             output = decoder(batch)

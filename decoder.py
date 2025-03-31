@@ -164,7 +164,6 @@ def model_from_json(json_file, device):
     return decoder
 
 
-# TODO: TESTAR O PREPARE_BATCH DEPOIS QUE TERMINAR O EVAL DO ANTERIOR, TEXT_ONLY E NAO
 if '__main__' == __name__:
     from trainDecoder import prepare_batch
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

@@ -93,11 +93,15 @@ def generate_dummy_texts(n=36):
     import string
     import random
     import pandas
-    dummy_texts = {'text': [], 'cd_guid': []}
+    dummy_texts = {'captions': [], 'image_embeddings': [], 'text_embeddings': [], 'image_id': []}
     for i in range(n):
-        dummy_texts['text'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
-        dummy_texts['cd_guid'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
-    pandas.DataFrame.from_dict(dummy_texts).to_excel('dummy.xlsx')
+        dummy_texts['captions'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
+        dummy_texts['image_id'].append(''.join(random.choice(string.ascii_uppercase) for _ in range(10)))
+        dummy_texts['image_embeddings'].append(torch.rand(1, 768))
+        dummy_texts['text_embeddings'].append(torch.rand(1, 768))
+
+    with open('dummy_petro.pkl', 'wb') as f:
+        pickle.dump(dummy_texts, f)
 
 
 if __name__ == '__main__':

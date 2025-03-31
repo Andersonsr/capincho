@@ -23,9 +23,14 @@ if __name__ == '__main__':
     model.eval()
     random.seed(args.random_seed)
     for i in tqdm([random.randint(0, len(data)) for i in range(args.num_images)]):
+        # print(data[i]['image_embeddings'].shape)
         generated = model.caption(data[i]['image_embeddings'], max_tokens=200, )
-        print(data[i]['image_id'])
-        print('ORIGINAL ' + data[i]['captions'][0])
-        print('GENERATED ' + generated[0])
+        print('id: ' + data[i]['image_id'])
+        if type(data[i]['captions']) is list:
+            print('ORIGINAL: ' + data[i]['captions'][0])
+        else:
+            print('ORIGINAL: ' + data[i]['captions'])
+
+        print('GENERATED: ' + generated[0])
 
 

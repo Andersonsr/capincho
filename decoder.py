@@ -15,7 +15,7 @@ except ImportError:
 
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=True, variance=0.016,
-                 dimension=768, collapse=None, normalize=True):
+                 dimension=768, normalize=True):
         super(Decoder, self).__init__()
         self.device = device
         print('decoder device {}'.format(device))
@@ -37,7 +37,6 @@ class Decoder(nn.Module):
         self.prefix_length = prefix_length
         self.fp = precision
         self.mapper = Mapper(dimension, self.hidden_size, self.prefix_length).to(dtype=precision)
-        self.collapse = collapse
         self.normalize = normalize
 
         if self.device:
@@ -50,8 +49,6 @@ class Decoder(nn.Module):
             set_seed(seed)
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-        if self.collapse is not None:
-            embeddings = embeddings - self.collapse
 
         # id do token de inicio de frase
         sos = torch.ones((embeddings.shape[0], 1)).to(dtype=torch.long) * 2
@@ -79,8 +76,6 @@ class Decoder(nn.Module):
             embeddings = embeddings.to(self.device)
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-        if self.collapse is not None:
-            embeddings = embeddings - embeddings
 
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)
 
@@ -160,7 +155,6 @@ def model_from_json(json_file, device):
     checkpoint = torch.load(config['checkpoint_path'])
     decoder.load_state_dict(checkpoint['model_state_dict'])
     decoder.normalize = config['normalize']
-    decoder.collapse = config['collapse']
     return decoder
 
 

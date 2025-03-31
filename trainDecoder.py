@@ -40,7 +40,7 @@ def prepare_batch(batch, text_only, device, num_descriptions=5):
 
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
-          full_finetune, schedule, add_noise, variance, save_history, dataset, root, dimension, collapse, log_step,
+          full_finetune, schedule, add_noise, variance, save_history, dataset, root, dimension, log_step,
           normalize):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -63,9 +63,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     val_loader, indices = val_data.get_loader(batch_size=batch_size)
 
     train_means = None
-    if collapse:
-        train_means = train_data.get_text_means().to(device) if text_only else train_data.get_image_means().to(device)
-
     # model
     decoder = Decoder(model_name, device,
                       prefix_length=prefix_len,
@@ -73,7 +70,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       add_noise=add_noise,
                       variance=variance,
                       dimension=dimension,
-                      collapse=train_means,
                       normalize=normalize)
 
     if not full_finetune:
@@ -120,8 +116,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                 decoder.add_noise = False
                 for val_batch in val_loader:
                     val_batch = prepare_batch(val_batch, False, device, num_descriptions=num_captions)
-                    if collapse:
-                        val_batch['embeddings'] -= train_means
 
                     with torch.no_grad():
                         val_output = decoder(val_batch)
@@ -188,7 +182,6 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'petro', 'cxr'], help='dataset name')
     parser.add_argument('--save_path', default='/nethome/recpinfo/users/fibz/data/', help='root dir for saving results')
     parser.add_argument('--dimension', default=768, type=int, help='embedding dimension')
-    parser.add_argument('--collapse', action='store_true', help='collapse embeddings', default=False)
     parser.add_argument('--normalize', action='store_true', help='normalize embeddings', default=False)
     parser.add_argument('--log_step', type=int, default=5000, help='log step')
     args = parser.parse_args()
@@ -200,8 +193,8 @@ if __name__ == '__main__':
     precision = torch.float16 if args.fp == 'fp16' else torch.float32
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune, args.schedule,
-          args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.collapse,
-          args.log_step, args.normalize)
+          args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
+          args.normalize)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

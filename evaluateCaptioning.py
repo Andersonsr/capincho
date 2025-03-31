@@ -24,6 +24,8 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
     for i in tqdm([random.randint(0, len(data)) for i in range(args.num_images)]):
         generated = model.caption(data[i]['image_embeddings'], max_tokens=200, )
-        print(data[i]['captions'], generated)
+        print(data[i]['image_id'])
+        print('ORIGINAL ' + data[i]['captions'][0])
+        print('GENERATED ' + generated[0])
 
 

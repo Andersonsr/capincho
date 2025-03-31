@@ -34,8 +34,14 @@ def prepare_batch(batch, text_only, device, num_descriptions=5):
     else:
         embeds = batch['image_embeddings']
         embeds = embeds.to(device)
-        c = random.randint(0, num_descriptions-1)
-        captions = [caption[c] for caption in batch['captions']]
+        if num_descriptions > 1:
+            # random description
+            c = random.randint(0, num_descriptions-1)
+            captions = [caption[c] for caption in batch['captions']]
+        else:
+            # only one description
+            captions = batch['captions']
+        # print(len(captions), embeds.shape)
         return {'captions': captions, 'embeddings': embeds}
 
 
@@ -62,7 +68,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     train_loader, indices = train_data.get_loader(batch_size=batch_size)
     val_loader, indices = val_data.get_loader(batch_size=batch_size)
 
-    train_means = None
     # model
     decoder = Decoder(model_name, device,
                       prefix_length=prefix_len,
@@ -94,7 +99,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     for epoch in range(epochs):
         log_loss = []
         i = 0
-        for batch in tqdm(train_loader, total=len(train_loader)):
+        for batch in tqdm(train_loader):
             batch = prepare_batch(batch, text_only, device, num_descriptions=num_captions)
             optim.zero_grad()
             output = decoder(batch)
@@ -180,7 +185,7 @@ if __name__ == '__main__':
     parser.add_argument('--variance', type=float, help='variance for noise injection', default=0.016)
     parser.add_argument('--history', action='store_true', help='save epoch history', default=False)
     parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'petro', 'cxr'], help='dataset name')
-    parser.add_argument('--save_path', default='/nethome/recpinfo/users/fibz/data/', help='root dir for saving results')
+    parser.add_argument('--save_path', required=True, help='root dir for saving results')
     parser.add_argument('--dimension', default=768, type=int, help='embedding dimension')
     parser.add_argument('--normalize', action='store_true', help='normalize embeddings', default=False)
     parser.add_argument('--log_step', type=int, default=5000, help='log step')

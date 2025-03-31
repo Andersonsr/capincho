@@ -157,10 +157,8 @@ if __name__ == '__main__':
         print(batch['text_embeddings'].shape)
         print(batch['image_embeddings'].shape)
         print(len(batch['image_id']))
-        # print(len(batch['image_name']))
         print(len(batch['captions']))
-        # print(batch['text_embeddings'].norm(dim=-1).shape)
-        # b = batch['image_embeddings'] / batch['image_embeddings'].norm(dim=-1)
+        print(batch['captions'])
         break
 
 

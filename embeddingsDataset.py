@@ -16,8 +16,8 @@ class PetroDataset(Dataset):
         '''
         assert os.path.exists(path), '{} does not exist'.format(path)
         data = pickle.load(open(path, 'rb'))
-        lim = int(ratio * len(data))
-
+        lim = int(ratio * len(data['image_id']))
+        # print(data)
         if split is None:
             self.text_embeddings = data['text_embeddings']
             self.image_embeddings = data['image_embeddings']
@@ -25,10 +25,11 @@ class PetroDataset(Dataset):
             self.image_id = data['image_id']
 
         elif split == 'train':
-            self. text_embeddings = data['text_embeddings'][:lim]
+            self.text_embeddings = data['text_embeddings'][:lim]
             self.image_embeddings = data['image_embeddings'][:lim]
             self.captions = data['captions'][:lim]
             self.image_id = data['image_id'][:lim]
+            # print(len(self.text_embeddings))
 
         elif split == 'val':
             self.text_embeddings = data['text_embeddings'][lim:]
@@ -147,7 +148,7 @@ if __name__ == '__main__':
     if args.dataset == 'coco':
         dataset = COCODataset(args.path)
     elif args.dataset == 'petro':
-        dataset = PetroDataset(args.path)
+        dataset = PetroDataset(args.path, split='train')
     else:
         raise ValueError('dataset not supported, choices=[petro, coco]')
 

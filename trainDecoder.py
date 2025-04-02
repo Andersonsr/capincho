@@ -25,24 +25,20 @@ def prepare_batch(batch, text_only, device, num_descriptions=5):
 
     if text_only:
         embeds = batch['text_embeddings']
-        embeds = embeds.to(device)
-        c = random.randint(0, 4)
-        captions = [caption[c] for caption in batch['captions']]
-        embeds = [embed[c].unsqueeze(dim=0) for embed in embeds]
-        return {'captions': captions, 'embeddings': torch.stack(embeds)}
 
     else:
         embeds = batch['image_embeddings']
-        embeds = embeds.to(device)
-        if num_descriptions > 1:
-            # random description
-            c = random.randint(0, num_descriptions-1)
-            captions = [caption[c] for caption in batch['captions']]
-        else:
-            # only one description
-            captions = batch['captions']
-        # print(len(captions), embeds.shape)
-        return {'captions': captions, 'embeddings': embeds}
+
+    embeds = embeds.to(device)
+    if num_descriptions > 1:
+        # random description
+        c = random.randint(0, num_descriptions-1)
+        captions = [caption[c] for caption in batch['captions']]
+    else:
+        # only one description
+        captions = batch['captions']
+    # print(len(captions), embeds.shape)
+    return {'captions': captions, 'embeddings': embeds}
 
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,

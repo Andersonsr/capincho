@@ -1,4 +1,7 @@
+import argparse
+
 import torch
+from util import model_size, learnable_parameters
 from embeddingsDataset import COCODataset
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
@@ -79,7 +82,6 @@ class Decoder(nn.Module):
 
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)
 
-        # final shape [batch, sos + prefix + caption, d_model]
         captions_emb = self.get_input_embeds(captions).to(dtype=self.fp)
 
         if self.device:
@@ -87,6 +89,7 @@ class Decoder(nn.Module):
         if len(captions_emb.shape) == 2:
             captions_emb = captions_emb.unsqueeze(0)
 
+        # final shape [batch, sos + prefix + caption len, d_model]
         input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
 
         # opt ignores -100 labels during loss computation
@@ -142,6 +145,7 @@ class Decoder(nn.Module):
 # utility function
 def model_from_json(json_file, device):
     import json
+    import os
     with open(json_file, 'r') as f:
         config = json.load(f)
     precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
@@ -149,30 +153,30 @@ def model_from_json(json_file, device):
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
                       add_noise=config['text_only'], dimension=config['dimension'])
 
-    if not config['full_finetune']:
-        decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
+    if not os.path.exists(config['model_name']):
+        # decoder model is not locally trained
+        if not config['full_finetune']:
+            decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
 
     checkpoint = torch.load(config['checkpoint_path'])
     decoder.load_state_dict(checkpoint['model_state_dict'])
     decoder.normalize = config['normalize']
+
+    print('loaded model from {}'.format(json_file))
+    learnable_parameters(decoder)
+
     return decoder
 
 
 if '__main__' == __name__:
-    from trainDecoder import prepare_batch
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dataset = COCODataset('embeddings/foundation/openclip_coco_val.pkl')
-    loader, indices = dataset.get_loader(batch_size=16)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--experiment', required=True, type=str, help='experiment json to load model')
+    parser.add_argument('--input', required=True, type=str, )
 
-    model = model_from_json('results/decoders/openclip_vis/experiment.json', device)
-    for batch in loader:
-        print(batch['text_embeddings'].shape)
-        batch = prepare_batch(batch, True, device)
-        print(batch['embeddings'].shape)
-        model(batch)
-        break
-
-    # tokens = model.tokenizer('teste de ids')
-    # print(tokens)
-    # decoded = model.tokenizer.decode(tokens.input_ids)
-    # print(decoded)
+    args = parser.parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model_from_json(args.experiment, device)
+    input_ids = model.tokenizer(args.input, return_tensors='pt').input_ids
+    output = model.model.generate(input_ids=input_ids.to(device))
+    text = model.tokenizer.decode(output[0], skip_special_tokens=True)
+    print(text)

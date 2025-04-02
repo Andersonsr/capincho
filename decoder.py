@@ -1,5 +1,4 @@
 import argparse
-
 import torch
 from util import model_size, learnable_parameters
 from embeddingsDataset import COCODataset

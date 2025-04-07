@@ -61,6 +61,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     elif dataset == 'petro-txt':
         train_data = TextLoader(filename, has_embeddings=True, split='train')
         val_data = TextLoader(filename, has_embeddings=True, split='val')
+        assert text_only, 'petro-txt only supports text only training'
 
     else:
         raise ValueError(f'{dataset} is not a valid dataset')
@@ -121,7 +122,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                 decoder.eval()
                 decoder.add_noise = False
                 for val_batch in val_loader:
-                    val_batch = prepare_batch(val_batch, False, device, num_descriptions=num_captions)
+                    flag = True if dataset == 'petro-txt' else False
+                    val_batch = prepare_batch(val_batch, flag, device, num_descriptions=num_captions)
 
                     with torch.no_grad():
                         val_output = decoder(val_batch)
@@ -178,14 +180,14 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default="facebook/opt-350m", help='OPT model name')
     parser.add_argument('--prefix_len', type=int, default=10, help='model prefix length')
     parser.add_argument('--fp', choices=['fp16', 'fp32'], default='fp32', help='float precision')
-    parser.add_argument('--text_only', action='store_true',
+    parser.add_argument('--text_only', action='store_true', default=False,
                         help='train using text embeddings as input instead of image embeddings')
     parser.add_argument('--full_finetune', action='store_true', help='fine tune entire model', default=False)
     parser.add_argument('--schedule', action='store_true', help='use linear scheduler', default=False)
     parser.add_argument('--noise', action='store_true', help='add noise to embeddings', default=False)
     parser.add_argument('--variance', type=float, help='variance for noise injection', default=0.016)
     parser.add_argument('--history', action='store_true', help='save epoch history', default=False)
-    parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'petro', 'cxr'], help='dataset name')
+    parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'petro', 'petro-txt'], help='dataset name')
     parser.add_argument('--save_path', required=True, help='root dir for saving results')
     parser.add_argument('--dimension', default=768, type=int, help='embedding dimension')
     parser.add_argument('--normalize', action='store_true', help='normalize embeddings', default=False)
@@ -197,6 +199,10 @@ if __name__ == '__main__':
         print(f'folders created: {args.save_path}')
 
     precision = torch.float16 if args.fp == 'fp16' else torch.float32
+    # epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
+    #           full_finetune, schedule, add_noise, variance, save_history, dataset, root, dimension, log_step,
+    #           normalize
+
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune, args.schedule,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,

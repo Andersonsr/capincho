@@ -11,6 +11,7 @@ import os
 from decoder import Decoder
 from textLoader import TextLoader
 from util import model_size, learnable_parameters
+from peft import PeftModel
 
 
 def prepare_batch(batch, text_only, device, num_descriptions=5):
@@ -79,8 +80,14 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       normalize=normalize)
 
     if not full_finetune:
-        if os.path.exists(os.path.join(model_name, 'adapter_config.json')):
-            decoder.load_adapter(model_name)
+        adapter_config = os.path.join(model_name, 'adapter_config.json')
+        # model was adapted before, load existing adapter to continue training
+        if os.path.exists(adapter_config):
+            decoder.model = PeftModel.from_pretrained(
+                model_name,
+                adapter_config,
+                is_trainable=True
+            )
 
         else:
             decoder.lora_model(r, alpha, dropout)

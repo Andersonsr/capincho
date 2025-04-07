@@ -18,7 +18,10 @@ def adapt_features(model,
     texts = []
     for i in tqdm(range(len(dataset))):
         images.append(model.image_projection(dataset.image_embeddings[i]).detach().cpu())
-        texts.append(model.text_projection(dataset.text_embeddings[i]).detach().cpu())
+        if not model.frozen_text:
+            texts.append(model.text_projection(dataset.text_embeddings[i]).detach().cpu())
+        else:
+            texts.append(dataset.text_embeddings[i].detach().cpu())
 
     data = {'image_embeddings': images,
             'text_embeddings': texts,
@@ -42,18 +45,19 @@ if __name__ == '__main__':
         config = json.load(f)
 
     logit_scale = config['logit_scale'] * torch.ones([])
+    if 'frozen_text' in config.keys():
+        frozen_text = config['frozen_text']
+    else:
+        frozen_text = False
 
     if config['adapter'] == 'contrastive':
         model = ContrastiveResidualAdapter(config['input_dim'], config['alpha'], logit_scale,
-                                           config['learnable_alpha'])
+                                           config['learnable_alpha'], frozen_text=frozen_text)
 
     elif config['adapter'] == 'sig':
         logit_bias = config['bias'] * torch.ones([])
         model = SigAdapter(config['embedding_dim'], config['alpha'], logit_bias, logit_scale,
                            config['multiple_positives'], config['use_bias'], )
-
-    elif config['adapter'] == 'mixer':
-        model = MixerAdapter(config['input_dim'], config['alpha'], logit_scale, config['learnable_alpha'])
 
     checkpoint = torch.load(config['checkpoint_path'])
     model.load_state_dict(checkpoint['model_state_dict'])

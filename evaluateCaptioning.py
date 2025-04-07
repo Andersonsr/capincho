@@ -22,15 +22,23 @@ if __name__ == '__main__':
     model = model_from_json(args.model, device)
     model.eval()
     random.seed(args.random_seed)
+
+    generated = []
+    gt = []
+    ids = []
     for i in tqdm([random.randint(0, len(data)) for i in range(args.num_images)]):
         # print(data[i]['image_embeddings'].shape)
-        generated = model.caption(data[i]['image_embeddings'], max_tokens=200, )
-        print('id: ' + data[i]['image_id'])
+        generated.append(model.caption(data[i]['image_embeddings'], max_tokens=200, )[0])
+        ids.append(data[i]['image_id'])
+        gt.append(data[i]['captions'])
+
+    for i in range(len(ids)):
+        print('id: ', data[i]['image_id'])
         if type(data[i]['captions']) is list:
-            print('ORIGINAL: ' + data[i]['captions'][0])
+            print('ORIGINAL: ', data[i]['captions'][0])
         else:
             print('ORIGINAL: ' + data[i]['captions'])
 
-        print('GENERATED: ' + generated[0])
+        print('GENERATED: ', generated[0])
 
 

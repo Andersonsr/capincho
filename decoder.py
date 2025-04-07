@@ -157,7 +157,7 @@ def model_from_json(json_file, device):
         if not config['full_finetune']:
             decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
 
-    checkpoint = torch.load(config['checkpoint_path'])
+    checkpoint = torch.load(config['checkpoint_path'], map_location=device)
     decoder.load_state_dict(checkpoint['model_state_dict'])
     decoder.normalize = config['normalize']
 

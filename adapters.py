@@ -14,7 +14,9 @@ class ContrastiveResidualAdapter(nn.Module):
         self.imageAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
         if not frozen_text:
             self.textAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
+
         self.logit_scale = nn.Parameter(initial_logit_scale)
+        self.frozen_text = frozen_text
 
     def forward(self, batch):
         image_features = batch['image_embeddings'].to(device, torch.float32).squeeze()
@@ -51,7 +53,9 @@ class ContrastiveResidualAdapter(nn.Module):
             loss = i_loss + t_loss
             loss.backward()
             optim.step()
-            self.textAdapter.residual = nn.Parameter(torch.clamp(self.textAdapter.residual, min=0, max=1))
+            if not self.frozen_text:
+                self.textAdapter.residual = nn.Parameter(torch.clamp(self.textAdapter.residual, min=0, max=1))
+
             self.imageAdapter.residual = nn.Parameter(torch.clamp(self.imageAdapter.residual, min=0, max=1))
             epoch_losses.append(loss.detach().cpu())
         return np.mean(epoch_losses)

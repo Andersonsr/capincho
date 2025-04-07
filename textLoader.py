@@ -8,9 +8,8 @@ import numpy as np
 
 
 class TextLoader(Dataset):
-    '''
-    Load xlsx for feature extraction if param has_embedding is False, load pkl with extracted features otherwise
-    '''
+    # Load xlsx for feature extraction if param has_embedding is False, load pkl with extracted features otherwise
+
     def __init__(self, data_path, has_embeddings=False, split='train'):
 
         if not has_embeddings:
@@ -23,7 +22,6 @@ class TextLoader(Dataset):
 
             self.texts = data['texts']
             self.images = data['images']
-
 
         else:
             with open(data_path, 'rb') as f:
@@ -45,7 +43,7 @@ class TextLoader(Dataset):
     def __getitem__(self, index):
         if self.has_embeddings:
             embedding = torch.tensor(self.embeddings[index])
-            return {'captions': self.texts[index], 'embeddings': embedding}
+            return {'captions': self.texts[index], 'text_embeddings': embedding}
         else:
             return {'captions': self.texts[index]}
 
@@ -53,7 +51,7 @@ class TextLoader(Dataset):
         indices = np.arange(len(self.texts))
         sampler = torch.utils.data.SequentialSampler(indices)
         loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
-        return loader
+        return loader, indices
 
 
 if __name__ == '__main__':

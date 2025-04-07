@@ -144,6 +144,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, required=True, choices=['coco', 'petro'], help='dataset name')
     parser.add_argument('--path', type=str, required=True, help='path to dataset')
     args = parser.parse_args()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    from trainDecoder import prepare_batch
 
     if args.dataset == 'coco':
         dataset = COCODataset(args.path)
@@ -159,7 +161,10 @@ if __name__ == '__main__':
         print(batch['image_embeddings'].shape)
         print(len(batch['image_id']))
         print(len(batch['captions']))
-        print(batch['captions'])
+        # print(batch['captions'])
+        batch = prepare_batch(batch, False, device, num_descriptions=1)
+        print(batch['embeddings'].shape)
+
         break
 
 

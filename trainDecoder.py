@@ -79,8 +79,12 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       normalize=normalize)
 
     if not full_finetune:
-        decoder.lora_model(r, alpha, dropout)
-        print("Lora model")
+        if os.path.exists(os.path.join(model_name, 'adapter_config.json')):
+            decoder.load_adapter(model_name)
+
+        else:
+            decoder.lora_model(r, alpha, dropout)
+            print("Lora model")
 
     optim = AdamW(decoder.parameters(), lr=lr)
 
@@ -151,6 +155,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
                 decoder.train(True)
                 decoder.add_noise = add_noise
+                # model_size(decoder)
+                # learnable_parameters(decoder)
 
         # epoch model
         model_dict = {'epoch': epoch + 1,

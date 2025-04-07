@@ -38,8 +38,9 @@ if __name__ == '__main__':
         # print(data[i]['image_embeddings'].shape)
         if args.dataset == 'petro' or args.dataset == 'coco':
             embedding = data[i]['image_embeddings']
+
         elif args.dataset == 'petro-txt':
-            embedding = data[i]['text_embeddings']
+            embedding = data[i]['text_embeddings'].unsqueeze(dim=0)
         else:
             raise ValueError(f'{args.dataset} is not a valid dataset')
 

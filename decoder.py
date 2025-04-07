@@ -1,7 +1,10 @@
 import argparse
+import os
+
 import torch
 from util import model_size, learnable_parameters
 from embeddingsDataset import COCODataset
+
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 from mapping import Mapper
@@ -140,6 +143,12 @@ class Decoder(nn.Module):
         )
         self.model = get_peft_model(self.model, config).to(self.fp)
 
+    def load_adapter(self, path):
+        if os.path.exists(path):
+            self.model.load_adapter(path)
+        else:
+            raise FileNotFoundError(f'{path} does not exist')
+
 
 # utility function
 def model_from_json(json_file, device):
@@ -152,10 +161,9 @@ def model_from_json(json_file, device):
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
                       add_noise=config['text_only'], dimension=config['dimension'])
 
-    if not os.path.exists(config['model_name']):
-        # decoder model is not locally trained
-        if not config['full_finetune']:
-            decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
+    # decoder model is not locally trained
+    if not config['full_finetune']:
+        decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
 
     checkpoint = torch.load(config['checkpoint_path'], map_location=device)
     decoder.load_state_dict(checkpoint['model_state_dict'])

@@ -84,6 +84,7 @@ class Decoder(nn.Module):
 
         if self.device:
             captions_emb = captions_emb.to(self.device)
+
         if len(captions_emb.shape) == 2:
             captions_emb = captions_emb.unsqueeze(0)
 
@@ -108,6 +109,7 @@ class Decoder(nn.Module):
     def get_input_embeds(self, prompt):
         if self.device:
             input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.to(self.device).squeeze(0)
+
         else:
             input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.squeeze(0)
 
@@ -119,6 +121,7 @@ class Decoder(nn.Module):
         if self.device:
             ids = ids.to(self.device)
             embeddings = embeddings.to(self.device)
+
         return embeddings(ids).shape[1]
 
     def noise_injection(self, x, ):
@@ -128,6 +131,7 @@ class Decoder(nn.Module):
     def lora_model(self, r, alpha, dropout):
         for param in self.model.parameters():
             param.requires_grad = False
+
         config = LoraConfig(
             r=r,
             lora_alpha=alpha,
@@ -139,6 +143,9 @@ class Decoder(nn.Module):
         )
         self.model = get_peft_model(self.model, config).to(self.fp)
 
+    def load_decoder(self, path):
+        raise NotImplementedError()
+
 
 # utility function
 def model_from_json(json_file, device):
@@ -146,8 +153,8 @@ def model_from_json(json_file, device):
     import os
     with open(json_file, 'r') as f:
         config = json.load(f)
-    precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
 
+    precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
                       add_noise=config['text_only'], dimension=config['dimension'])
 

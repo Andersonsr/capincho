@@ -80,21 +80,16 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       normalize=normalize)
 
     if not full_finetune:
-        adapter_config = os.path.join(model_name, 'adapter_config.json')
         # model was adapted before, load existing adapter to continue training
-        if os.path.exists(adapter_config):
-            decoder.model = PeftModel.from_pretrained(
-                model_name,
-                adapter_config,
-                is_trainable=True
-            )
+        # TODO: criar uma funcao para carregar o adaptador do decoder
+        if os.path.exists(os.path.join(model_name, 'adapter_config.json')):
+            decoder.model.load_adapter(model_name, is_trainable=True)
 
         else:
+            # create new adapter
             decoder.lora_model(r, alpha, dropout)
-            print("Lora model")
 
     optim = AdamW(decoder.parameters(), lr=lr)
-
     model_size(decoder)
     learnable_parameters(decoder)
 
@@ -212,9 +207,12 @@ if __name__ == '__main__':
         print(f'folders created: {args.save_path}')
 
     precision = torch.float16 if args.fp == 'fp16' else torch.float32
-    # epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
-    #           full_finetune, schedule, add_noise, variance, save_history, dataset, root, dimension, log_step,
-    #           normalize
+
+    cfg_path = os.path.join(args.model_name, 'adapter_config.json')
+    if os.path.exists(cfg_path):
+        with json.load(open(cfg_path, 'rb')) as cfg:
+            args.rank = cfg['r']
+            args.alpha = cfg['lora_alpha']
 
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune, args.schedule,

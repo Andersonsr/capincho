@@ -34,8 +34,7 @@ def model_size(model):
             size_model += param.numel() * torch.finfo(param.data.dtype).bits
         else:
             size_model += param.numel() * torch.iinfo(param.data.dtype).bits
-    print(f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB")
-    return size_model / 8e6
+    return f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB"
 
 
 def learnable_parameters(model):
@@ -46,7 +45,7 @@ def learnable_parameters(model):
         if param.requires_grad:
             learnable += param.numel()
 
-    print(f'total params: {total / 1e6:.2f}M,  learnable params: {learnable / 1e6:.2f}M')
+    return f'total params: {total / 1e6:.2f}M,  learnable params: {learnable / 1e6:.2f}M'
 
 
 def split_sentence(sentence, limit):

@@ -13,18 +13,16 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, required=True, help='path to xlsx file with text and ids')
     parser.add_argument('--model', type=str, required=True, help='model to use for feature extraction',
                         choices=['clip', 'openclip', 'coca'])
-    parser.add_argument('--download_root', type=str, required=True, help='folder to download and load models')
     args = parser.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # models dict
     model_dict = {'coca': foundation_models.OpenCoCa,
                   'clip': foundation_models.CLIP,
-                  'openclip': foundation_models.OpenCLIP,
-                  'capivara': foundation_models.Capivara}
+                  'openclip': foundation_models.OpenCLIP}
     # model init
     model = model_dict[args.model](device)
-    model.load_model(download_root=args.download_root)
+    model.load_model()
     model.backbone.eval()
 
     df = pd.read_excel(args.path)

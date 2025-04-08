@@ -1,3 +1,4 @@
+import logging
 import json
 import os.path
 import random
@@ -25,21 +26,26 @@ if __name__ == '__main__':
                         help='number of images to evaluate in qualitative evaluation')
     parser.add_argument('--load_results', action='store_true', help='load saved results')
     parser.add_argument('--collapse', action='store_true', help='collapse embeddings', default=False)
-
+    parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     args = parser.parse_args()
+
+    logger = logging.getLogger('captioning')
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
     decoder = model_from_json(args.experiment, device)
     decoder.add_noise = False
     decoder.eval()
     embeddings = COCODataset(path=args.embeddings, n_captions=1)
     means = torch.zeros(len(embeddings))
+
     if args.collapse:
         train_data = COCODataset(path=args.embeddings.replace('val', 'train'), n_captions=1)
         means = train_data.get_image_means()
         decoder.collapse = means
 
-    print('\n Evaluating captioning \n')
+    logging.info('\n Evaluating captioning \n')
     coco = COCO('datasets_torchvision/coco_2017/annotations/captions_val2017.json')
+
     if args.qualitative:
         random.seed(args.random_seed)
         for i in [random.randint(0, len(embeddings)) for i in range(args.num_images)]:
@@ -72,9 +78,10 @@ if __name__ == '__main__':
     else:
         name = os.path.join(os.path.dirname(args.experiment), 'generated.json')
         if not args.load_results:
-            print(f'generating captions at {name}')
+            logging.info(f'generating captions at {name}')
             data = embeddings[:]
             embeddings = data['image_embeddings']
+            logging.debug(f'embedding shape: {embeddings[0].shape}')
 
             captions = [decoder.caption(e)[0] for e in tqdm(embeddings)]
             results = []
@@ -85,7 +92,7 @@ if __name__ == '__main__':
                 json.dump(results, f, indent=2)
         else:
             assert os.path.isfile(name), f'{name} does not exist'
-            print(f'loading results from {name}')
+            logging.info(f'loading results from {name}')
 
         res = coco.loadRes(name)
         coco_eval = COCOEvalCap(coco, res)

@@ -77,10 +77,10 @@ if __name__ == '__main__':
     for batch in data.get_loader(batch_size=2):
         with torch.no_grad():
             embeddings_text += model.language_embedding(batch['captions']).detach().cpu().tolist()
-            embeddings_image += model.language_embedding(batch['image']).detach().cpu().tolist()
+            # embeddings_image += model.language_embedding(batch['image']).detach().cpu().tolist()
             texts += batch['captions']
 
-    new_dict = {'captions': texts, 'text_embeddings': embeddings_text, 'image_embeddings': embeddings_image}
+    new_dict = {'captions': texts, 'text_embeddings': embeddings_text}
     # print(embeddings)
     # print(texts)
     with open(args.output, 'wb') as f:

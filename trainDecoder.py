@@ -1,6 +1,7 @@
 import argparse
 import pickle
 import random
+import logging
 import torch
 from transformers import AdamW, get_linear_schedule_with_warmup
 from embeddingsDataset import COCODataset, PetroDataset
@@ -26,18 +27,24 @@ def prepare_batch(batch, text_only, device, num_descriptions=5):
 
     if text_only:
         embeds = batch['text_embeddings']
+        logging.debug(f'prepare batch using text embeddings')
 
     else:
         embeds = batch['image_embeddings']
+        logging.debug(f'prepare batch using image embeddings')
 
     embeds = embeds.to(device)
     if num_descriptions > 1:
         # random description
         c = random.randint(0, num_descriptions-1)
+        logging.debug(f'prepare batch randomized caption {c} of {num_descriptions}')
         captions = [caption[c] for caption in batch['captions']]
+
     else:
         # only one description
+        logging.debug(f'prepare batch, only one caption')
         captions = batch['captions']
+
     # print(len(captions), embeds.shape)
     return {'captions': captions, 'embeddings': embeds}
 
@@ -81,24 +88,29 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
     if not full_finetune:
         # model was adapted before, load existing adapter to continue training
-        # TODO: criar uma funcao para carregar o adaptador do decoder
         if os.path.exists(os.path.join(model_name, 'adapter_config.json')):
             decoder.model.load_adapter(model_name, is_trainable=True)
+            logging.debug('loaded existing adapter')
 
         else:
             # create new adapter
             decoder.lora_model(r, alpha, dropout)
 
     optim = AdamW(decoder.parameters(), lr=lr)
-    model_size(decoder)
-    learnable_parameters(decoder)
+
+    logging.debug('DECODER SIZE')
+    logging.debug(model_size(decoder.model))
+    logging.debug(learnable_parameters(decoder.model))
+
+    logging.debug('MAPPER SIZE')
+    logging.debug(model_size(decoder.mapper))
+    logging.debug(learnable_parameters(decoder.mapper))
 
     scheduler = None
     if schedule:
         scheduler = get_linear_schedule_with_warmup(optim, num_warmup_steps=10,
                                                     num_training_steps=epochs * len(train_loader))
 
-    save_path = os.path.join(args.save_path, 'checkpoint.pt')
     training_losses = []
     validation_losses = []
 
@@ -129,6 +141,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                 decoder.add_noise = False
                 for val_batch in val_loader:
                     flag = True if dataset == 'petro-txt' else False
+                    logging.debug(f'validation using text embedding? {flag}')
                     val_batch = prepare_batch(val_batch, flag, device, num_descriptions=num_captions)
 
                     with torch.no_grad():
@@ -166,14 +179,10 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       'optimizer_state_dict': optim.state_dict(),
                       'loss': training_losses[-1]
                       }
-
-        # save models for each epoch or overwrite existing one
         if save_history:
-            path = save_path.split('.')[0]
-            path += f'_epoch{epoch}.pt'
-            torch.save(model_dict, path)
+            torch.save(model_dict, f'{root}/checkpoint_{epoch+1}.pt')
         else:
-            torch.save(model_dict, save_path)
+            torch.save(model_dict, f'{root}/checkpoint.pt')
 
 
 if __name__ == '__main__':
@@ -200,16 +209,21 @@ if __name__ == '__main__':
     parser.add_argument('--dimension', default=768, type=int, help='embedding dimension')
     parser.add_argument('--normalize', action='store_true', help='normalize embeddings', default=False)
     parser.add_argument('--log_step', type=int, default=5000, help='log step')
+    parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     args = parser.parse_args()
+
+    logger = logging.getLogger('captioning')
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
-        print(f'folders created: {args.save_path}')
+        logging.info(f'folders created: {args.save_path}')
 
     precision = torch.float16 if args.fp == 'fp16' else torch.float32
 
     cfg_path = os.path.join(args.model_name, 'adapter_config.json')
     if os.path.exists(cfg_path):
+        logging.debug('decoder was adapted before')
         with json.load(open(cfg_path, 'rb')) as cfg:
             args.rank = cfg['r']
             args.alpha = cfg['lora_alpha']
@@ -223,3 +237,4 @@ if __name__ == '__main__':
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')
     with open(f'{args.save_path}/experiment.json', 'w') as f:
         json.dump(result_dict, f, indent=2)
+        logging.info(f'experiment saved')

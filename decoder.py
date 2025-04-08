@@ -1,11 +1,11 @@
 import argparse
 import torch
+import logging
 from util import model_size, learnable_parameters
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 from mapping import Mapper
 import math
-import copy
 from transformers import T5Model, T5ForConditionalGeneration
 from transformers import T5Tokenizer
 try:
@@ -13,13 +13,14 @@ try:
 except ImportError:
     print('lora not available')
 
-
+logger = logging.getLogger('captioning')
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=True, variance=0.016,
                  dimension=768, normalize=True):
         super(Decoder, self).__init__()
         self.device = device
-        print('decoder device {}'.format(device))
+        logging.info('decoder device {}'.format(device))
+
         if 'opt' in model_name:
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
@@ -31,7 +32,6 @@ class Decoder(nn.Module):
             self.tokenizer = T5Tokenizer.from_pretrained(model_name)
             self.model = T5ForConditionalGeneration.from_pretrained(model_name)
 
-        self.embeddings_layer = copy.deepcopy(self.model.get_input_embeddings())
         self.add_noise = add_noise
         self.variance = variance
         self.hidden_size = self._get_hidden_size()
@@ -43,28 +43,34 @@ class Decoder(nn.Module):
         if self.device:
             self.model.to(self.device)
             self.mapper.to(self.device)
-            self.embeddings_layer.to(self.device)
 
     def caption(self, embeddings, stochastic=False, max_tokens=50, seed=32):
         if stochastic:
             set_seed(seed)
+
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
 
+        logging.debug(f'input embeddings shape:{embeddings.shape}')
         # id do token de inicio de frase
         sos = torch.ones((embeddings.shape[0], 1)).to(dtype=torch.long) * 2
 
         if self.device:
             sos = sos.to(self.device)
-        sos = self.embeddings_layer(sos)
+
+        embeddings_layer = self.model.get_input_embeddings()
+        sos = embeddings_layer(sos)
 
         if self.device:
             sos = sos.to(self.device)
             embeddings = embeddings.to(self.device)
 
         prefix = self.mapper(embeddings.to(dtype=self.fp)).view(-1, self.prefix_length, self.hidden_size)
+        logging.debug(f'prefix shape: {prefix.shape}')
         prefix = torch.concat([sos, prefix], dim=1)
+        logging.debug(f'concatenated shape: {prefix.shape}')
         generated_ids = self.model.generate(do_sample=stochastic, max_new_tokens=max_tokens, inputs_embeds=prefix)
+
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     def forward(self, batch):
@@ -78,18 +84,25 @@ class Decoder(nn.Module):
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
 
+        logging.debug(f'forward, input embeddings shape: {embeddings.shape}')
+        logging.debug(f'number of captions: {len(captions)}')
+
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)
+        logging.debug(f'forward, prefix embeddings shape: {prefix_tokens.shape}')
 
         captions_emb = self.get_input_embeds(captions).to(dtype=self.fp)
+        logging.debug(f'forward, captions embeddings shape: {captions_emb.shape}')
 
         if self.device:
             captions_emb = captions_emb.to(self.device)
 
         if len(captions_emb.shape) == 2:
+            logging.debug(f'forward, captions embeddings unsqueeze')
             captions_emb = captions_emb.unsqueeze(0)
 
         # final shape [batch, sos + prefix + caption len, d_model]
         input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
+        logging.debug(f'concatenated shape: {input_emb.shape}')
 
         # opt ignores -100 labels during loss computation
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
@@ -113,7 +126,8 @@ class Decoder(nn.Module):
         else:
             input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.squeeze(0)
 
-        return self.embeddings_layer(input_ids)
+        embeddings_layer = self.model.get_input_embeddings()
+        return embeddings_layer(input_ids)
 
     def _get_hidden_size(self):
         ids = self.tokenizer("prompt", return_tensors="pt").input_ids.squeeze(0)

@@ -3,16 +3,15 @@ import pickle
 import random
 import logging
 import torch
-from transformers import AdamW, get_linear_schedule_with_warmup
 from embeddingsDataset import COCODataset, PetroDataset
 from tqdm import tqdm
+from torch.optim import AdamW
 import matplotlib.pyplot as plt
 import json
 import os
 from decoder import Decoder
 from textLoader import TextLoader
 from util import model_size, learnable_parameters
-from peft import PeftModel
 
 
 def prepare_batch(batch, text_only, device, num_descriptions=5):
@@ -50,7 +49,7 @@ def prepare_batch(batch, text_only, device, num_descriptions=5):
 
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
-          full_finetune, schedule, add_noise, variance, save_history, dataset, root, dimension, log_step,
+          full_finetune, add_noise, variance, save_history, dataset, root, dimension, log_step,
           normalize):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -107,10 +106,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     logging.debug(learnable_parameters(decoder.mapper))
 
     scheduler = None
-    if schedule:
-        scheduler = get_linear_schedule_with_warmup(optim, num_warmup_steps=10,
-                                                    num_training_steps=epochs * len(train_loader))
-
     training_losses = []
     validation_losses = []
 
@@ -127,8 +122,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
             optim.step()
 
             i += 1
-            if schedule:
-                scheduler.step()
             loss = output.loss.detach().cpu().item()
             log_loss.append(loss)
 
@@ -200,7 +193,6 @@ if __name__ == '__main__':
     parser.add_argument('--text_only', action='store_true', default=False,
                         help='train using text embeddings as input instead of image embeddings')
     parser.add_argument('--full_finetune', action='store_true', help='fine tune entire model', default=False)
-    parser.add_argument('--schedule', action='store_true', help='use linear scheduler', default=False)
     parser.add_argument('--noise', action='store_true', help='add noise to embeddings', default=False)
     parser.add_argument('--variance', type=float, help='variance for noise injection', default=0.016)
     parser.add_argument('--history', action='store_true', help='save epoch history', default=False)
@@ -230,7 +222,7 @@ if __name__ == '__main__':
             args.alpha = cfg['lora_alpha']
 
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
-          args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune, args.schedule,
+          args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
           args.normalize)
 

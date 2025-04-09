@@ -73,6 +73,9 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     else:
         raise ValueError(f'{dataset} is not a valid dataset')
 
+    logging.debug('training dataset size: %d' % len(train_data))
+    logging.debug('validation dataset size: %d' % len(val_data))
+
     train_loader, indices = train_data.get_loader(batch_size=batch_size)
     val_loader, indices = val_data.get_loader(batch_size=batch_size)
 
@@ -94,6 +97,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         else:
             # create new adapter
             decoder.lora_model(r, alpha, dropout)
+            logging.debug('created new adapter')
 
     optim = AdamW(decoder.parameters(), lr=lr)
 
@@ -105,7 +109,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     logging.debug(model_size(decoder.mapper))
     logging.debug(learnable_parameters(decoder.mapper))
 
-    scheduler = None
     training_losses = []
     validation_losses = []
 
@@ -163,6 +166,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
                 decoder.train(True)
                 decoder.add_noise = add_noise
+                logging.debug(f'add noise to embeddings? {decoder.add_noise}')
                 # model_size(decoder)
                 # learnable_parameters(decoder)
 
@@ -212,7 +216,7 @@ if __name__ == '__main__':
         logging.info(f'folders created: {args.save_path}')
 
     precision = torch.float16 if args.fp == 'fp16' else torch.float32
-
+    logging.debug(f'precision: {precision}')
     cfg_path = os.path.join(args.model_name, 'adapter_config.json')
     if os.path.exists(cfg_path):
         logging.debug('decoder was adapted before')
@@ -220,6 +224,7 @@ if __name__ == '__main__':
             cfg = json.load(f)
             args.rank = cfg['r']
             args.alpha = cfg['lora_alpha']
+            logging.debug(f'decoder rank: {args.rank} alpha: {args.alpha}')
 
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,

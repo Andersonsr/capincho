@@ -42,7 +42,7 @@ class TextLoader(Dataset):
 
     def __getitem__(self, index):
         if self.has_embeddings:
-            embedding = torch.tensor(self.embeddings[index])
+            embedding = torch.tensor(self.embeddings[index]).unsqueeze(0)
             return {'captions': self.texts[index], 'text_embeddings': embedding}
         else:
             return {'captions': self.texts[index]}

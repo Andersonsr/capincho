@@ -224,7 +224,8 @@ if __name__ == '__main__':
     cfg_path = os.path.join(args.model_name, 'adapter_config.json')
     if os.path.exists(cfg_path):
         logging.debug('decoder was adapted before')
-        with json.load(open(cfg_path, 'rb')) as cfg:
+        with open(cfg_path, 'rb') as f:
+            cfg = json.load(f)
             args.rank = cfg['r']
             args.alpha = cfg['lora_alpha']
 

@@ -49,6 +49,7 @@ if __name__ == '__main__':
         else:
             raise ValueError(f'{args.dataset} is not a valid dataset')
 
+        logging.debug(f'loaded embedding shape: {embedding.shape}')
         generated.append(model.caption(embedding, max_tokens=200, )[0])
 
         if 'image_id' in data[i].keys():

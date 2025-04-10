@@ -24,6 +24,16 @@ class TextLoader(Dataset):
     def __len__(self):
         return len(self.texts)
 
+    def collate_fn(self, batch):
+        text_embeddings = []
+        captions = []
+        for e in batch:
+            text_embeddings.append(e['text_embeddings'])
+            captions.append(e['captions'])
+
+        return {'text_embeddings': torch.stack(text_embeddings),
+                'captions': captions}
+
     def __getitem__(self, index):
         embedding = torch.tensor(self.embeddings[index])
         return {'captions': self.texts[index], 'text_embeddings': embedding}
@@ -31,7 +41,8 @@ class TextLoader(Dataset):
     def get_loader(self, batch_size=32):
         indices = np.arange(len(self.texts))
         sampler = torch.utils.data.SequentialSampler(indices)
-        loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
+        loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False,
+                                             collate_fn=self.collate_fn)
         return loader, indices
 
 

@@ -45,7 +45,7 @@ if __name__ == '__main__':
             embedding = data[i]['image_embeddings']
 
         elif args.dataset == 'petro-txt':
-            embedding = data[i]['text_embeddings'].unsqueeze(dim=0)
+            embedding = data[i]['text_embeddings']
         else:
             raise ValueError(f'{args.dataset} is not a valid dataset')
 

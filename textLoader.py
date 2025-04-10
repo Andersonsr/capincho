@@ -35,7 +35,7 @@ class TextLoader(Dataset):
                 'captions': captions}
 
     def __getitem__(self, index):
-        embedding = torch.tensor(self.embeddings[index])
+        embedding = self.embeddings[index]
         return {'captions': self.texts[index], 'text_embeddings': embedding}
 
     def get_loader(self, batch_size=32):

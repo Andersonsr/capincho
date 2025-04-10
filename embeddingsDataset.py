@@ -84,6 +84,7 @@ class COCODataset(Dataset):
         return len(self.image_embeddings)
 
     def __getitem__(self, index):
+        # print('embedding shape 0', self.image_embeddings[index].shape)
         payload = {'image_id': self.image_id[index],
                    'image_name': self.image_name[index],
                    'image_embeddings': self.image_embeddings[index],

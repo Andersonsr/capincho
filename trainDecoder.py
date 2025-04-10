@@ -91,7 +91,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     if not full_finetune:
         # model was adapted before, load existing adapter to continue training
         if os.path.exists(os.path.join(model_name, 'adapter_config.json')):
-            decoder.model.load_adapter(model_name, is_trainable=True)
             logging.debug('loaded existing adapter')
 
         else:

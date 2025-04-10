@@ -14,6 +14,8 @@ except ImportError:
     print('lora not available')
 
 logger = logging.getLogger('captioning')
+
+
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=True, variance=0.016,
                  dimension=768, normalize=True):
@@ -170,13 +172,13 @@ def model_from_json(json_file, device):
 
     precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
-                      add_noise=config['text_only'], dimension=config['dimension'])
-
-    # decoder model is not locally trained
-    if not config['full_finetune']:
-        decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
+                      add_noise=False, dimension=config['dimension'])
 
     checkpoint = torch.load(config['checkpoint_path'], map_location=device)
+    if not os.path.exists(config['model_name']) and not config['full_finetune']:
+        # decoder model is on the hub, and is not adapted by default
+        decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
+
     decoder.load_state_dict(checkpoint['model_state_dict'])
     decoder.normalize = config['normalize']
 

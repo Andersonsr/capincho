@@ -45,16 +45,18 @@ if __name__ == '__main__':
             raise ValueError(f'{args.dataset} is not a valid dataset')
 
         generated.append(model.caption(embedding, max_tokens=200, )[0])
-        ids.append(data[i]['image_id'])
+        if 'image_id' in data[i].keys():
+            ids.append(data[i]['image_id'])
         gt.append(data[i]['captions'])
 
     for i in range(len(ids)):
-        print('id: ', data[i]['image_id'])
-        if type(data[i]['captions']) is list:
-            print('ORIGINAL: ', data[i]['captions'][0])
+        if 'image_id' in data[i].keys():
+            print('id: ', ids[i])
+        if type(gt[i]) is list:
+            print('ORIGINAL: ', gt[i][0])
         else:
-            print('ORIGINAL: ' + data[i]['captions'])
+            print('ORIGINAL: ' + gt[i])
 
-        print('GENERATED: ', generated[0])
+        print('GENERATED: ', generated[i])
 
 

@@ -47,6 +47,6 @@ if __name__ == '__main__':
     for batch in loader:
         print(batch['text_embeddings'].shape)
         print(len(batch['captions']))
-        batch = prepare_batch(batch, False, device, num_descriptions=1)
+        batch = prepare_batch(batch, True, device, num_descriptions=1)
         print(batch['embeddings'].shape)
         break

@@ -1,4 +1,5 @@
 import argparse
+import logging
 import random
 import torch
 from embeddingsDataset import PetroDataset, COCODataset
@@ -17,12 +18,16 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=777, help='random seed for qualitative evaluation')
     parser.add_argument('--num_images', '-n', type=int, default=10, help='number of images to evaluate')
     parser.add_argument('--dataset', type=str, required=True, choices=['petro', 'petro-txt', 'coco'])
-
+    parser.add_argument('--debug', action='store_true', default=False, help='debug mode')
     args = parser.parse_args()
+
+    logger = logging.getLogger('captioning')
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+
     if args.dataset == 'petro':
         data = PetroDataset(args.embeddings, split=args.split)
     elif args.dataset == 'petro-txt':
-        data = TextLoader(args.embeddings, split=args.split, has_embeddings=True)
+        data = TextLoader(args.embeddings, split=args.split,)
     elif args.dataset == 'coco':
         data = COCODataset(args.embeddings, n_captions=1)
 
@@ -45,6 +50,7 @@ if __name__ == '__main__':
             raise ValueError(f'{args.dataset} is not a valid dataset')
 
         generated.append(model.caption(embedding, max_tokens=200, )[0])
+
         if 'image_id' in data[i].keys():
             ids.append(data[i]['image_id'])
         gt.append(data[i]['captions'])

@@ -14,7 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--path', '-p', type=str, required=True, help='path to texts xlsx')
     parser.add_argument('--output', '-o', type=str, required=True, help='output path')
     parser.add_argument('--model', '-m', type=str, required=True, help='model name', choices=['openclip', 'clip'])
-    parser.add_argument('--debug', '-d', type=bool, default=False, help='debug ')
+    parser.add_argument('--debug', '-d', action='store_true', default=False, help='debug ')
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     data = pd.read_excel(args.path)
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         texts = row['texts']
         txt_embed = model.language_embedding(row['texts'])
         text_embeddings.append(txt_embed.detach().cpu())
-        logging.debug(f'text embeddings size: {len(text_embeddings)}')
+        logging.debug(f'text embeddings size: {len(txt_embed)}')
 
     data = {'captions': df['texts'].tolist(),
             'text_embeddings': text_embeddings}

@@ -2,7 +2,6 @@ import pickle
 import torch
 from torch.utils.data import Dataset
 import argparse
-from trainDecoder import prepare_batch
 import numpy as np
 
 
@@ -12,14 +11,14 @@ class TextLoader(Dataset):
         with open(data_path, 'rb') as f:
             data = pickle.load(f)
 
-        lim = int(0.9 * len(data['embeddings']))
+        lim = int(0.9 * len(data['text_embeddings']))
         # print(f'LEN: {lim}')
         if split == 'train':
-            self.embeddings = data['embeddings'][:lim]
+            self.embeddings = data['text_embeddings'][:lim]
             self.texts = data['captions'][:lim]
 
         if split == 'val':
-            self.embeddings = data['embeddings'][lim:]
+            self.embeddings = data['text_embeddings'][lim:]
             self.texts = data['captions'][lim:]
 
     def __len__(self):
@@ -43,6 +42,7 @@ if __name__ == '__main__':
     data = TextLoader(args.path)
     loader, indices = data.get_loader(batch_size=4)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    from trainDecoder import prepare_batch
 
     for batch in loader:
         print(batch['text_embeddings'].shape)

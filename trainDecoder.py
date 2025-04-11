@@ -66,8 +66,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         val_data = PetroDataset(filename, split='val')
 
     elif dataset == 'petro-txt':
-        train_data = TextLoader(filename, has_embeddings=True, split='train')
-        val_data = TextLoader(filename, has_embeddings=True, split='val')
+        train_data = TextLoader(filename, split='train')
+        val_data = TextLoader(filename, split='val')
         assert text_only, 'petro-txt only supports text only training'
 
     else:
@@ -92,6 +92,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         # model was adapted before, load existing adapter to continue training
         if os.path.exists(os.path.join(model_name, 'adapter_config.json')):
             logging.debug('loaded existing adapter')
+            decoder.model.enable_adapters()
 
         else:
             # create new adapter

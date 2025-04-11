@@ -30,6 +30,8 @@ if __name__ == '__main__':
         data = TextLoader(args.embeddings, split=args.split,)
     elif args.dataset == 'coco':
         data = COCODataset(args.embeddings, n_captions=1)
+    else:
+        raise ValueError('Unknown dataset: {}'.format(args.dataset))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model_from_json(args.model, device)
@@ -56,7 +58,7 @@ if __name__ == '__main__':
             ids.append(data[i]['image_id'])
         gt.append(data[i]['captions'])
 
-    for i in range(len(ids)):
+    for i in range(len(gt)):
         if 'image_id' in data[i].keys():
             print('id: ', ids[i])
         if type(gt[i]) is list:
@@ -65,5 +67,6 @@ if __name__ == '__main__':
             print('ORIGINAL: ' + gt[i])
 
         print('GENERATED: ', generated[i])
+        print()
 
 

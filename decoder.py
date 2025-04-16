@@ -46,10 +46,9 @@ class Decoder(nn.Module):
             self.model.to(self.device)
             self.mapper.to(self.device)
 
-    def caption(self, embeddings, stochastic=False, max_tokens=50, seed=32):
-        if stochastic:
-            set_seed(seed)
-
+    def caption(self, embeddings, sample=False, max_tokens=200, seed=32, num_beams=1, top_k=None, top_p=None,
+                temperature=1.0, penalty=None):
+        set_seed(seed)
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
 
@@ -71,7 +70,15 @@ class Decoder(nn.Module):
         logging.debug(f'prefix shape: {prefix.shape}')
         prefix = torch.concat([sos, prefix], dim=1)
         logging.debug(f'concatenated shape: {prefix.shape}')
-        generated_ids = self.model.generate(do_sample=stochastic, max_new_tokens=max_tokens, inputs_embeds=prefix)
+
+        generated_ids = self.model.generate(do_sample=sample,
+                                            max_new_tokens=max_tokens,
+                                            inputs_embeds=prefix,
+                                            num_beams=num_beams,
+                                            top_k=top_k,
+                                            top_p=top_p,
+                                            temperature=temperature,
+                                            penalty_alpha=penalty)
 
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 

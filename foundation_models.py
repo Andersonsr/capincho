@@ -9,6 +9,7 @@ try:
 except ImportError:
     print('Open CLIP not available')
 
+
 # handling big images
 Image.MAX_IMAGE_PIXELS = 999999999
 ImageFile.LOAD_TRUNCATED_IMAGES = True

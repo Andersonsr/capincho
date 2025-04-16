@@ -19,11 +19,20 @@ if __name__ == '__main__':
     parser.add_argument('--num_images', '-n', type=int, default=10, help='number of images to evaluate')
     parser.add_argument('--dataset', type=str, required=True, choices=['petro', 'petro-txt', 'coco'])
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode')
+    # generation arguments
+    parser.add_argument('--top_p', type=float, default=None, help='sampling top-p')
+    parser.add_argument('--top_k', type=int, default=None, help='sampling top-k')
+    parser.add_argument('--do_sample', action='store_true', default=False, help='')
+    parser.add_argument('--num_beams', type=int, default=1, help='number of beams')
+    parser.add_argument('--max_tokens', type=int, default=200, help='maximum number of generated tokens')
+    parser.add_argument('--temperature', type=float, default=1, help='logit temperature')
+    parser.add_argument('--penalty', type=float, default=None, help='penalty for contrastive search')
     args = parser.parse_args()
 
     logger = logging.getLogger('captioning')
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
+    # which dataset to load
     if args.dataset == 'petro':
         data = PetroDataset(args.embeddings, split=args.split)
     elif args.dataset == 'petro-txt':
@@ -34,6 +43,7 @@ if __name__ == '__main__':
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model = model_from_json(args.model, device)
     model.eval()
     random.seed(args.random_seed)
@@ -52,7 +62,15 @@ if __name__ == '__main__':
             raise ValueError(f'{args.dataset} is not a valid dataset')
 
         logging.debug(f'loaded embedding shape: {embedding.shape}')
-        generated.append(model.caption(embedding, max_tokens=200, )[0])
+        output = model.caption(embedding,
+                               max_tokens=args.max_tokens,
+                               top_k=args.top_k,
+                               top_p=args.top_p,
+                               num_beams=args.num_beams,
+                               temperature=args.temperature,
+                               sample=args.do_sample,
+                               penalty=args.penalty)
+        generated.append(output[0])
 
         if 'image_id' in data[i].keys():
             ids.append(data[i]['image_id'])

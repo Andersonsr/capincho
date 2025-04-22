@@ -1,3 +1,5 @@
+import logging
+
 import torch
 from PIL import Image, ImageFile
 from abc import ABC, abstractmethod
@@ -14,6 +16,9 @@ except ImportError:
 Image.MAX_IMAGE_PIXELS = 999999999
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+# logging
+logger = logging.getLogger('captioning')
+
 
 class Model(ABC):
     def __init__(self, device):
@@ -23,33 +28,71 @@ class Model(ABC):
         self.vision_preprocess = None
         self.language_preprocess = None
         self.device = device
+        self.dim = None
 
     @abstractmethod
     def load_model(self):
         pass
 
     @abstractmethod
-    def visual_embedding(self, image_path):
-        pass
-
-    @abstractmethod
     def language_embedding(self, text):
         pass
+
+    def patch_image(self, image_path):
+        image = Image.open(image_path)
+        w, h = image.size
+        logger.debug('original size {}x{}'.format(image.size[0], image.size[1]))
+        if w != h:
+            image = image.crop((0, 0, min([h, w]), min([h, w])))
+            logger.debug('cropped size {}x{}'.format(image.size[0], image.size[1]))
+
+        w, h = image.size
+        crops = []
+        resize_dim = min(w//2, self.dim)
+        crops.append(image.crop((0, 0, w//2, h//2)).resize((resize_dim, resize_dim)))
+        crops.append(image.crop((w//2, 0, w, h//2)).resize((resize_dim, resize_dim)))
+        crops.append(image.crop((0, h//2, w//2, h)).resize((resize_dim, resize_dim)))
+        crops.append(image.crop((w//2, h//2, w, h)).resize((resize_dim, resize_dim)))
+        logger.debug('patch size {}x{}'.format(crops[0].size[0], crops[0].size[1]))
+
+        return crops
 
     def similarity(self, text_features, image_features):
         image_features /= image_features.norm(dim=-1, keepdim=True)
         text_features /= text_features.norm(dim=-1, keepdim=True)
         return (image_features @ text_features.T).max()
 
+    def patch_embedding(self, image_path, resize=False):
+        patches_embeddings = []
+        patches = self.patch_image(image_path)
+        with torch.no_grad():
+            for image in patches:
+                image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
+                if resize and image.shape[0] > self.dim:
+                    logger.debug('resizing patch image, original size: {}x{}'.format(image.shape[0], image.shape[1]))
+                    image = image.resize((self.dim, self.dim))
+                    logger.debug('resized patch size: {}x{}'.format(image.shape[0], image.shape[1]))
+
+                patches_embeddings.append(self.backbone.encode_image(image))
+
+        return torch.stack(patches_embeddings)
+
+    def visual_embedding(self, image_path, resize=False):
+        image = Image.open(image_path).convert("RGB")
+        if resize and image.size[0] > self.dim:
+            logger.debug('resizing image, original size: {}x{}'.format(image.size[0], image.size[1]))
+            image = image.resize((self.dim, self.dim))
+            logger.debug('resize image: {}x{}'.format(image.size[0], image.size[1]))
+        image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
+        return self.backbone.encode_image(image)
+
 
 class CLIP(Model):
-    def load_model(self, encoder='ViT-L/14'):
-        self.backbone, self.vision_preprocess = clip.load(encoder, device=self.device, download_root=self.download_root)
-
-    def visual_embedding(self, image_path):
-        with torch.no_grad():
-            image = self.vision_preprocess(Image.open(image_path)).unsqueeze(0).to(self.device)
-            return self.backbone.encode_image(image)
+    def load_model(self):
+        self.backbone, self.vision_preprocess = clip.load('ViT-L/14',
+                                                          device=self.device,
+                                                          download_root=self.download_root)
+        self.dim = 224
 
     def language_embedding(self, text):
         with torch.no_grad():
@@ -58,11 +101,6 @@ class CLIP(Model):
 
 
 class OpenCoCa(Model):
-    def visual_embedding(self, image_path, ):
-        image = Image.open(image_path).convert("RGB")
-        image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
-        return self.backbone.encode_image(image)
-
     def language_embedding(self, text):
         text = self.language_preprocess(text)
         # print(text.shape, text)
@@ -74,19 +112,30 @@ class OpenCoCa(Model):
         self.backbone, _, self.vision_preprocess = open_clip.create_model_and_transforms(
             model_name="coca_ViT-L-14",
             pretrained="laion2B-s13B-b90k",
-            # pretrained="mscoco_finetuned_laion2B-s13B-b90k",
             device=self.device,
             cache_dir=self.download_root
         )
         self.language_preprocess = open_clip.get_tokenizer('ViT-L-14')
+        self.dim = 224
+
+
+class SigLIP(Model):
+    def load_model(self):
+        self.backbone, _, self.vision_preprocess = open_clip.create_model_and_transforms(
+            model_name="ViT-SO400M-14-SigLIP-384",
+            pretrained="webli",
+            device=self.device,
+            cache_dir=self.download_root
+        )
+        self.language_preprocess = open_clip.get_tokenizer('ViT-L-14')
+        self.dim = 384
+
+    def language_embedding(self, text):
+        text = self.language_preprocess(text)
+        return self.backbone.encode_text(text.to(self.device))
 
 
 class OpenCLIP(Model):
-    def visual_embedding(self, image_path):
-        image = Image.open(image_path).convert("RGB")
-        image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
-        return self.backbone.encode_image(image)
-
     def language_embedding(self, text):
         text = self.language_preprocess(text)
         return self.backbone.encode_text(text.to(self.device))
@@ -99,9 +148,21 @@ class OpenCLIP(Model):
             cache_dir=self.download_root
         )
         self.language_preprocess = open_clip.get_tokenizer('ViT-L-14')
+        self.dim = 224
 
+
+model_dict = {'coca': OpenCoCa,
+              'clip': CLIP,
+              'openclip': OpenCLIP,
+              'sig-lip': SigLIP}
 
 if __name__ == "__main__":
-    for i in open_clip.list_pretrained():
-        if 'L' in i[0]:
-            print(i)
+    model = CLIP('cuda:0')
+    model.load_model()
+    crops = model.patch_image('./plots/cars result.png')
+    embeds = model.patch_embedding(crops)
+    logger = logging.getLogger('captioning')
+    logging.basicConfig(level=logging.DEBUG)
+
+
+

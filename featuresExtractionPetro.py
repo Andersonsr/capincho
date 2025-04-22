@@ -48,7 +48,7 @@ if __name__ == '__main__':
         data['image_embeddings'].append(vis_embed.detach().cpu())
 
         if args.patched:
-            patches_embeds = model.patch_embedding(img_path, args.resize)
+            patches_embeds = model.patch_embedding(img_path)
             logger.debug('Patches embedding shape: {}x{}x{}'.format(
                 patches_embeds.shape[0], patches_embeds.shape[1], patches_embeds.shape[2]))
 

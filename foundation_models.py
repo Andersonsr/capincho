@@ -41,10 +41,10 @@ class Model(ABC):
     def patch_image(self, image_path):
         image = Image.open(image_path)
         w, h = image.size
-        logger.debug('original size {}x{}'.format(image.size[0], image.size[1]))
+        logger.debug('original dim {}x{}'.format(image.size[0], image.size[1]))
         if w != h:
             image = image.crop((0, 0, min([h, w]), min([h, w])))
-            logger.debug('cropped size {}x{}'.format(image.size[0], image.size[1]))
+            logger.debug('patch dim {}x{}'.format(image.size[0], image.size[1]))
 
         w, h = image.size
         crops = []
@@ -53,7 +53,7 @@ class Model(ABC):
         crops.append(image.crop((w//2, 0, w, h//2)).resize((resize_dim, resize_dim)))
         crops.append(image.crop((0, h//2, w//2, h)).resize((resize_dim, resize_dim)))
         crops.append(image.crop((w//2, h//2, w, h)).resize((resize_dim, resize_dim)))
-        logger.debug('patch size {}x{}'.format(crops[0].size[0], crops[0].size[1]))
+        logger.debug('patch resized dim {}x{}'.format(crops[0].size[0], crops[0].size[1]))
 
         return crops
 
@@ -62,17 +62,12 @@ class Model(ABC):
         text_features /= text_features.norm(dim=-1, keepdim=True)
         return (image_features @ text_features.T).max()
 
-    def patch_embedding(self, image_path, resize=False):
+    def patch_embedding(self, image_path):
         patches_embeddings = []
         patches = self.patch_image(image_path)
         with torch.no_grad():
             for image in patches:
                 image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
-                if resize and image.shape[0] > self.dim:
-                    logger.debug('resizing patch image, original size: {}x{}'.format(image.shape[0], image.shape[1]))
-                    image = image.resize((self.dim, self.dim))
-                    logger.debug('resized patch size: {}x{}'.format(image.shape[0], image.shape[1]))
-
                 patches_embeddings.append(self.backbone.encode_image(image))
 
         return torch.stack(patches_embeddings)

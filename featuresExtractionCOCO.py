@@ -33,19 +33,13 @@ if __name__ == '__main__':
     data = {'image_name': [], 'image_id': [], 'image_embeddings': [], 'text_embeddings': [], 'captions': []}
     if args.patched:
         data['patch_embeddings'] = []
+        logger.info('patching enabled')
 
     for i, image in enumerate(tqdm(imgs)):
         data['image_name'].append(image['file_name'])
         data['image_id'].append(ids[i])
         img_name = 'datasets_torchvision/coco_2017/{}2017/{}'.format(args.split, image['file_name'])
         img_embeds = model.visual_embedding(img_name)
-
-        if args.patched:
-            patches_embeds = model.patch_embedding(img_name)
-            logger.debug('Patches embedding shape: {}x{}x{}'.format(
-                patches_embeds.shape[0], patches_embeds.shape[1], patches_embeds.shape[2]))
-
-            data['patch_embeddings'].append(patches_embeds)
 
         logger.debug('image name: {}'.format(image['file_name']))
         logger.debug('img_embeds shape {}x{} '.format(img_embeds.shape[0], img_embeds.shape[1]))
@@ -58,6 +52,14 @@ if __name__ == '__main__':
         data['text_embeddings'].append(text_embeds.detach().cpu())
         data['captions'].append(texts[:5])
 
+        if args.patched:
+            patches_embeds = model.patch_embedding(img_name)
+            logger.debug('Patches embedding shape: {}x{}x{}'.format(
+                patches_embeds.shape[0], patches_embeds.shape[1], patches_embeds.shape[2]))
+
+            data['patch_embeddings'].append(patches_embeds.detach().cpu())
+
+    print(data.keys())
     with open(args.save_path, 'wb') as f:
         pickle.dump(data, f)
 

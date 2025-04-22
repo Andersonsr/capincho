@@ -13,12 +13,15 @@ from decoder import Decoder
 from textLoader import TextLoader
 from util import model_size, learnable_parameters
 
+# TODO: gerar texto a partir das embeddings dos patches, alterar codigo para funcionar com dim batchx4xmodel_dim
 
-def prepare_batch(batch, text_only, device, num_descriptions=5):
+
+def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
     '''
     Prepare the batch to be forwarded to the model
     :param batch: batch to be processed
     :param text_only: to use text only or not (Boolean)
+    :param patch: patch embeddings
     :param device: device to use for computation
     :param num_descriptions: total number of descriptions for each image, used to randomize the captioning
     :return: object with keys 'caption' and 'embeddings'
@@ -29,8 +32,11 @@ def prepare_batch(batch, text_only, device, num_descriptions=5):
         logging.debug(f'prepare batch using text embeddings')
 
     else:
-        embeds = batch['image_embeddings']
-        logging.debug(f'prepare batch using image embeddings')
+        if patch:
+            embeds = batch['patch_embeddings']
+        else:
+            embeds = batch['image_embeddings']
+            logging.debug(f'prepare batch using image embeddings')
 
     embeds = embeds.to(device)
     if num_descriptions > 1:

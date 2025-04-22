@@ -18,24 +18,30 @@ class PetroDataset(Dataset):
         data = pickle.load(open(path, 'rb'))
         lim = int(ratio * len(data['image_id']))
         # print(data)
+        self.patch_embeddings = []
         if split is None:
             self.text_embeddings = data['text_embeddings']
             self.image_embeddings = data['image_embeddings']
             self.captions = data['captions']
             self.image_id = data['image_id']
+            if 'patch_embeddings' in data:
+                self.patch_embeddings = data['patch_embeddings']
 
         elif split == 'train':
             self.text_embeddings = data['text_embeddings'][:lim]
             self.image_embeddings = data['image_embeddings'][:lim]
             self.captions = data['captions'][:lim]
             self.image_id = data['image_id'][:lim]
-            # print(len(self.text_embeddings))
+            if 'patch_embeddings' in data:
+                self.patch_embeddings = data['patch_embeddings'][:lim]
 
         elif split == 'val':
             self.text_embeddings = data['text_embeddings'][lim:]
             self.image_embeddings = data['image_embeddings'][lim:]
             self.captions = data['captions'][lim:]
             self.image_id = data['image_id'][lim:]
+            if 'patch_embeddings' in data:
+                self.patch_embeddings = data['patch_embeddings'][lim:]
 
         else:
             raise ValueError('{} is not a valid split, choices = [train, val]'.format(split))
@@ -44,10 +50,12 @@ class PetroDataset(Dataset):
         return len(self.captions)
 
     def __getitem__(self, index):
-        return {'image_id': self.image_id[index],
-                'image_embeddings': self.image_embeddings[index],
-                'text_embeddings': self.text_embeddings[index],
-                'captions': self.captions[index]}
+        payload = {'image_id': self.image_id[index],
+                   'image_embeddings': self.image_embeddings[index],
+                   'text_embeddings': self.text_embeddings[index],
+                   'captions': self.captions[index]}
+        if len(self.patch_embeddings) > 0:
+            payload['patch_embeddings'] = self.patch_embeddings[index]
 
     def get_loader(self, batch_size):
         '''
@@ -66,6 +74,7 @@ class COCODataset(Dataset):
         assert os.path.exists(path), '{} does not exist'.format(path)
         self.text_embeddings = []
         self.captions = []
+        self.patch_embeddings = []
         with open(path, 'rb') as f:
             data = pickle.load(f)
             # print(data.keys())
@@ -76,6 +85,8 @@ class COCODataset(Dataset):
             self.image_embeddings = data['image_embeddings']
             self.image_id = data['image_id']
             self.image_name = data['image_name']
+            if 'patch_embeddings' in data.keys():
+                self.patch_embeddings = data['patch_embeddings']
 
         # print(len(self.text_embeddings), len(self.captions))
         # print(self.image_id)
@@ -90,6 +101,9 @@ class COCODataset(Dataset):
                    'image_embeddings': self.image_embeddings[index],
                    'text_embeddings': self.text_embeddings[index],
                    'captions': self.captions[index]}
+        if len(self.patch_embeddings) > 0:
+            payload['patch_embeddings'] = self.patch_embeddings[index]
+
         return payload
 
     def collate_fn(self, batch):
@@ -98,18 +112,27 @@ class COCODataset(Dataset):
         image_embeddings = []
         text_embeddings = []
         captions = []
+        patch_embeddings = []
         for e in batch:
             ids.append(e['image_id'])
             names.append(e['image_name'])
             image_embeddings.append(e['image_embeddings'])
             text_embeddings.append(e['text_embeddings'])
             captions.append(e['captions'])
+            if 'patch_embeddings' in e.keys():
+                # print(e['patch_embeddings'].shape)
+                patch_embeddings.append(e['patch_embeddings'].squeeze(1))
 
-        return {'image_id': ids,
-                'image_name': names,
-                'image_embeddings': torch.stack(image_embeddings),
-                'text_embeddings': torch.stack(text_embeddings),
-                'captions': captions}
+        payload = {'image_id': ids,
+                   'image_name': names,
+                   'image_embeddings': torch.stack(image_embeddings),
+                   'text_embeddings': torch.stack(text_embeddings),
+                   'captions': captions}
+
+        if len(patch_embeddings) > 0:
+            payload['patch_embeddings'] = torch.stack(patch_embeddings)
+
+        return payload
 
     def get_loader(self, shuffle=False, batch_size=400):
         indices = np.arange(len(self.image_embeddings))
@@ -162,7 +185,6 @@ if __name__ == '__main__':
         print(batch['image_embeddings'].shape)
         print(len(batch['image_id']))
         print(len(batch['captions']))
-        # print(batch['captions'])
         batch = prepare_batch(batch, False, device, num_descriptions=1)
         print(batch['embeddings'].shape)
 

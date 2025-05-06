@@ -18,9 +18,10 @@ logger = logging.getLogger('captioning')
 
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=False, variance=0.016,
-                 dimension=768, normalize=False):
+                 dimension=768, normalize=False, prefix_before_bos=False, add_end_of_sentence=False):
         super(Decoder, self).__init__()
         self.device = device
+        self.before_bos = prefix_before_bos
         logging.info('decoder device {}'.format(device))
 
         if 'opt' in model_name:
@@ -41,47 +42,50 @@ class Decoder(nn.Module):
         self.fp = precision
         self.mapper = Mapper(dimension, self.hidden_size, self.prefix_length).to(dtype=precision)
         self.normalize = normalize
-
+        self.add_end_of_sentence = add_end_of_sentence
         if self.device:
             self.model.to(self.device)
             self.mapper.to(self.device)
 
-    def caption(self, embeddings, sample=False, max_tokens=200, seed=32, num_beams=1, top_k=None, top_p=None,
-                temperature=1.0, penalty=None):
+    def caption(self, embeddings, do_sample=False, max_tokens=200, seed=32, num_beams=1, top_k=None, top_p=None,
+                temperature=1.0, penalty_alpha=None, diversity_penalty=None):
         set_seed(seed)
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
 
         logging.debug(f'input embeddings shape:{embeddings.shape}')
-        # id do token de inicio de frase
-        sos = torch.ones((embeddings.shape[0], 1)).to(dtype=torch.long) * 2
+        embeddings = embeddings.to(self.device)
+        patches = 4 if len(embeddings.shape) > 2 else 1
 
-        if self.device:
-            sos = sos.to(self.device)
-
-        embeddings_layer = self.model.get_input_embeddings()
-        sos = embeddings_layer(sos)
-
-        if self.device:
-            sos = sos.to(self.device)
-            embeddings = embeddings.to(self.device)
-
-        prefix = self.mapper(embeddings.to(dtype=self.fp)).view(-1, self.prefix_length, self.hidden_size)
+        logging.debug(f'reshaped embeddings shape:{embeddings.shape}')
+        prefix = self.mapper(embeddings.to(dtype=self.fp)).view(-1, patches*self.prefix_length, self.hidden_size)
+        # reshape to 1, patches*maper_out, decoder_dim
         logging.debug(f'prefix shape: {prefix.shape}')
-        prefix = torch.concat([sos, prefix], dim=1)
+
+        # id do token de inicio de frase
+        bos = torch.ones((1, 1)).to(dtype=torch.long) * 2
+        bos = bos.to(self.device)
+        embeddings_layer = self.model.get_input_embeddings()
+        bos = embeddings_layer(bos)
+        if not self.before_bos:
+            prefix = torch.concat([bos, prefix], dim=1)
+
         logging.debug(f'concatenated shape: {prefix.shape}')
 
-        generated_ids = self.model.generate(do_sample=sample,
+        generated_ids = self.model.generate(do_sample=do_sample,
                                             max_new_tokens=max_tokens,
                                             inputs_embeds=prefix,
                                             num_beams=num_beams,
                                             top_k=top_k,
                                             top_p=top_p,
                                             temperature=temperature,
-                                            penalty_alpha=penalty)
+                                            penalty_alpha=penalty_alpha,
+                                            diversity_penalty=diversity_penalty)
 
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
+    # TODO: adicionar opcao para achatar as embeddings dos patches e alterar o tamanho da entrada do mapper de acordo
+    # TODO: adicionar opcao para colocar o token de inicio/fim de frase, OPT nao usa por default.
     def forward(self, batch):
         embeddings = batch['embeddings'].to(dtype=self.fp)
         captions = batch['captions']
@@ -93,7 +97,6 @@ class Decoder(nn.Module):
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
 
-
         # batch size, patches, model dim
         b, p, d = embeddings.shape
         embeddings = embeddings.view(b*p, 1, d)
@@ -104,44 +107,61 @@ class Decoder(nn.Module):
 
         logging.debug(f'forward, prefix embeddings shape: {prefix_tokens.shape}')
 
-        captions_emb = self.get_input_embeds(captions).to(dtype=self.fp)
+        captions_emb = self.get_input_embeds(captions).to(dtype=self.fp, device=device)
+        if self.add_end_of_sentence:
+            captions_emb = torch.concat([captions_emb, captions_emb[:, :1, :]], dim=1)
+
+        print("bos ", captions_emb[:, :1, :].shape)
         logging.debug(f'forward, captions embeddings shape: {captions_emb.shape}')
 
-        if self.device:
-            captions_emb = captions_emb.to(self.device)
-
         if len(captions_emb.shape) == 2:
-            logging.debug(f'forward, captions embeddings unsqueeze')
             captions_emb = captions_emb.unsqueeze(0)
+            logging.debug(f'forward, captions embeddings unsqueeze shape: {captions_emb.shape}')
 
-        # final shape [batch, sos + prefix + caption len, d_model]
-        input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
-        logging.debug(f'concatenated shape: {input_emb.shape}')
+        # final shape [batch, sos + prefix + caption len-1, d_model]
+        if self.before_bos:
+            input_emb = torch.concat([prefix_tokens, captions_emb], dim=1).to(self.fp)
 
-        # opt ignores -100 labels during loss computation
+        else:
+            input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
+
+        logging.debug(f'concatenated embeddings final shape: {input_emb.shape}')
+
+        # labels for auto regressive CE training
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
-        logging.debug('labels shape: {}'.format(labels.shape))
-        # ignore padding tokens
-        labels[labels == self.tokenizer.pad_token_id] = -100
-        # ignore prefix
-        ignore = torch.ones(input_emb.shape[0], self.prefix_length*p + 1) * -100
-        logging.debug('ignore shape: {}'.format(ignore.shape))
-        if self.device:
-            labels = labels.to(self.device)
-            ignore = ignore.to(self.device)
-            input_emb = input_emb.to(self.device)
 
-        labels = torch.concat([ignore, labels[:, 1:]], dim=1)
+        # append start of sentence token to the end of sentence
+        if self.add_end_of_sentence:
+            labels = torch.cat([labels, labels[:, :1]], dim=1)
+
+        logging.debug('labels shape: {}'.format(labels.shape))
+
+        # ignore padding tokens, OPT ignores -100 labels during loss computation
+        labels[labels == self.tokenizer.pad_token_id] = -100
+
+        # ignore prefix, set labels to skip prefix during loss computation
+        ignore_size = self.prefix_length*p
+        if self.before_bos:
+            ignore_size += 1
+
+        ignore = torch.ones(input_emb.shape[0],  ignore_size) * -100
+        logging.debug('ignore shape: {}'.format(ignore.shape))
+
+        labels = labels.to(self.device)
+        ignore = ignore.to(self.device)
+        input_emb = input_emb.to(self.device)
+        # concatenate prefix labels (-100) and text labels
+        if self.before_bos:
+            labels = torch.concat([ignore, labels[:, 1:]], dim=1)
+
+        else:
+            labels = torch.concat([labels[:, :1], ignore, labels[:, 1:]], dim=1)
+
         logging.debug('final labels shape: {}'.format(labels.shape))
         return self.model(inputs_embeds=input_emb, labels=labels.to(torch.long))
 
     def get_input_embeds(self, prompt):
-        if self.device:
-            input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.to(self.device).squeeze(0)
-
-        else:
-            input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.squeeze(0)
-
+        input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.to(self.device).squeeze(0)
         embeddings_layer = self.model.get_input_embeddings()
         return embeddings_layer(input_ids)
 
@@ -185,8 +205,9 @@ def model_from_json(json_file, device):
         config = json.load(f)
 
     precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
+    before_bos = config['before_bos'] if 'before_bos' in config else False
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
-                      add_noise=False, dimension=config['dimension'])
+                      add_noise=False, dimension=config['dimension'], prefix_before_bos=before_bos)
 
     checkpoint = torch.load(config['checkpoint_path'], map_location=device)
     if not os.path.exists(config['model_name']) and not config['full_finetune']:
@@ -211,6 +232,7 @@ if '__main__' == __name__:
                         type=str,
                         help='embeddings pkl')
     parser.add_argument('--patch', action='store_true', default=False)
+    parser.add_argument('--before', action='store_true', default=False, help='prefix before bos token')
 
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -220,7 +242,12 @@ if '__main__' == __name__:
     decoder = Decoder('facebook/opt-350m', device,
                       prefix_length=2,
                       dimension=768,
-                      normalize=True)
+                      normalize=True,
+                      prefix_before_bos=args.before,
+                      add_end_of_sentence=True)
+
+    output = decoder.tokenizer('outro texto de teste para teste de texto')
+    print(output, )
 
     data = COCODataset(args.embeddings, 5)
     print(data[:].keys())

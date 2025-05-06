@@ -29,3 +29,6 @@ configs
 gapAnalysis
 test
 CLIP-LoRA
+Llip
+hardEval.py
+mimic-code

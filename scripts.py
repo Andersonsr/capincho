@@ -104,5 +104,35 @@ def generate_dummy_texts(n=36):
         pickle.dump(dummy_texts, f)
 
 
+
+
+def fixDataCego():
+    import pickle
+    import json
+    from tqdm import tqdm
+    dataset_path = '/mnt/d/PraCegoVer/pracegover_400k.json'
+    name_root = 'embeddings/foundation/cego_openclip'
+
+    with open(dataset_path, 'rb') as f:
+        json_object = json.load(f)
+        for split in json_object.keys():
+            captions = []
+            for image in tqdm(json_object[split]):
+                captions.append(image['caption'])
+
+            with open(f'{name_root}_{split}.pkl', 'rb') as out:
+                data = pickle.load(out)
+                data['captions'] = captions
+
+                with open(f'{name_root}_{split}(1).pkl', 'wb') as fixed:
+                    pickle.dump(data, fixed)
+
+
 if __name__ == '__main__':
-    generate_dummy_texts()
+    import cv2
+    from PIL import Image
+    image_path = '/mnt/d/PraCegoVer/images/i-00000008.jpg'
+    image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
+    image = Image.fromarray(image).convert('RGB')
+    image.save('plots/converted.png')
+

@@ -4,7 +4,7 @@ import os.path
 import random
 from util import split_sentence
 from embeddingsDataset import COCODataset
-from decoder import Decoder, model_from_json
+from decoder import model_from_json
 import torch
 import argparse
 from PIL import Image, ImageFont, ImageDraw
@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_results', action='store_true', help='load saved results')
     parser.add_argument('--collapse', action='store_true', help='collapse embeddings', default=False)
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
+    parser.add_argument('--patched', action='store_true', help='use patches embeddings', default=False)
     args = parser.parse_args()
 
     logger = logging.getLogger('captioning')
@@ -49,7 +50,11 @@ if __name__ == '__main__':
     if args.qualitative:
         random.seed(args.random_seed)
         for i in [random.randint(0, len(embeddings)) for i in range(args.num_images)]:
-            input_emb = embeddings[i]['image_embeddings'][0].to(device, dtype=decoder.fp)
+            if not args.patched:
+                input_emb = embeddings[i]['image_embeddings'][0].to(device, dtype=decoder.fp)
+            else:
+                input_emb = embeddings[i]['patch_embeddings'][0].to(device, dtype=decoder.fp)
+
             generated = decoder.caption(input_emb, max_tokens=100, )
             ann_id = coco.getAnnIds(embeddings[i]['image_id'])
             ann = coco.loadAnns(ann_id)
@@ -80,7 +85,11 @@ if __name__ == '__main__':
         if not args.load_results:
             logging.info(f'generating captions at {name}')
             data = embeddings[:]
-            embeddings = data['image_embeddings']
+            if args.patched:
+                embeddings = data['image_embeddings']
+            else:
+                embeddings = data['patch_embeddings']
+
             logging.debug(f'embedding shape: {embeddings[0].shape}')
 
             captions = [decoder.caption(e)[0] for e in tqdm(embeddings)]

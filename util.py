@@ -30,10 +30,10 @@ def model_size(model):
     import torch
     size_model = 0
     for param in model.parameters():
-        if param.data.is_floating_point():
-            size_model += param.numel() * torch.finfo(param.data.dtype).bits
+        if param.df.is_floating_point():
+            size_model += param.numel() * torch.finfo(param.df.dtype).bits
         else:
-            size_model += param.numel() * torch.iinfo(param.data.dtype).bits
+            size_model += param.numel() * torch.iinfo(param.df.dtype).bits
     return f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB"
 
 

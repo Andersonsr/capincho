@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os.path
 import pickle
 import numpy as np
@@ -57,6 +58,8 @@ class PetroDataset(Dataset):
         if len(self.patch_embeddings) > 0:
             payload['patch_embeddings'] = self.patch_embeddings[index]
 
+        return payload
+
     def get_loader(self, batch_size):
         '''
         get torch dataloader
@@ -77,7 +80,10 @@ class COCODataset(Dataset):
         self.patch_embeddings = []
         with open(path, 'rb') as f:
             data = pickle.load(f)
-            # print(data.keys())
+            logging.debug('data keys: {}'.format(data.keys()))
+            logging.debug('len captions : {}'.format(len(data['captions'])))
+            logging.debug('len images : {}'.format(len(data['image_embeddings'])))
+
             for i in range(len(data['text_embeddings'])):
                 self.text_embeddings.append(data['text_embeddings'][i][:n_captions])
                 self.captions.append(data['captions'][i][:n_captions])
@@ -165,10 +171,13 @@ class COCODataset(Dataset):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('check output format')
-    parser.add_argument('--dataset', type=str, required=True, choices=['coco', 'petro'], help='dataset name')
+    parser.add_argument('--dataset', type=str, required=True, help='dataset name',
+                        choices=['coco', 'petro', 'cego'])
     parser.add_argument('--path', type=str, required=True, help='path to dataset')
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logger = logging.getLogger('captioning')
+    logging.basicConfig(level=logging.DEBUG)
     from trainDecoder import prepare_batch
 
     if args.dataset == 'coco':
@@ -185,7 +194,7 @@ if __name__ == '__main__':
         print(batch['image_embeddings'].shape)
         print(len(batch['image_id']))
         print(len(batch['captions']))
-        batch = prepare_batch(batch, False, device, num_descriptions=1)
+        batch = prepare_batch(batch, False, False, device, num_descriptions=1)
         print(batch['embeddings'].shape)
 
         break

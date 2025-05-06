@@ -1,10 +1,15 @@
 import logging
-
 import torch
 from PIL import Image, ImageFile
 from abc import ABC, abstractmethod
 import clip
 import os
+import cv2
+
+try:
+    import Llip.llip.open_clip as llip
+except ImportError:
+    print('Llip not installed')
 
 try:
     import open_clip
@@ -39,7 +44,8 @@ class Model(ABC):
         pass
 
     def patch_image(self, image_path):
-        image = Image.open(image_path)
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
+        image = Image.fromarray(image).convert('RGB')
         w, h = image.size
         logger.debug('original dim {}x{}'.format(image.size[0], image.size[1]))
         if w != h:
@@ -72,12 +78,16 @@ class Model(ABC):
 
         return torch.stack(patches_embeddings)
 
-    def visual_embedding(self, image_path, resize=False):
-        image = Image.open(image_path).convert("RGB")
+    # TODO: adicionar crop central para imagens que nao sao quadradas
+    def visual_embedding(self, image_path, resize=False, crop=False):
+        # opencv works better when reading big images
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
+        image = Image.fromarray(image).convert('RGB')
         if resize and image.size[0] > self.dim:
             logger.debug('resizing image, original size: {}x{}'.format(image.size[0], image.size[1]))
             image = image.resize((self.dim, self.dim))
             logger.debug('resize image: {}x{}'.format(image.size[0], image.size[1]))
+
         image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
         return self.backbone.encode_image(image)
 
@@ -93,7 +103,6 @@ class CLIP(Model):
         with torch.no_grad():
             text = clip.tokenize(text, context_length=77, truncate=True).to(self.device)
             return self.backbone.encode_text(text)
-
 
 class OpenCoCa(Model):
     def language_embedding(self, text):
@@ -146,18 +155,28 @@ class OpenCLIP(Model):
         self.dim = 224
 
 
+class Llip(Model):
+    def load_model(self):
+        pass
+
+    def language_embedding(self, text):
+        pass
+
+
 model_dict = {'coca': OpenCoCa,
               'clip': CLIP,
               'openclip': OpenCLIP,
               'sig-lip': SigLIP}
 
+
 if __name__ == "__main__":
-    model = CLIP('cuda:0')
-    model.load_model()
-    crops = model.patch_image('./plots/cars result.png')
-    embeds = model.patch_embedding(crops)
-    logger = logging.getLogger('captioning')
-    logging.basicConfig(level=logging.DEBUG)
+    # model = CLIP('cuda:0')
+    # model.load_model()
+    # crops = model.patch_image('./plots/cars result.png')
+    # embeds = model.patch_embedding(crops)
+    # logger = logging.getLogger('captioning')
+    # logging.basicConfig(level=logging.DEBUG)
 
-
+    models = llip.list_models()
+    print(models)
 

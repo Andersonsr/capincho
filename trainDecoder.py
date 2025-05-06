@@ -13,7 +13,7 @@ from decoder import Decoder
 from textLoader import TextLoader
 from util import model_size, learnable_parameters
 
-# TODO: gerar texto a partir das embeddings dos patches, alterar codigo para funcionar com dim batchx4xmodel_dim
+# TODO: juntar os patches antes do mapper ou usar cross attention.
 
 
 def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
@@ -42,13 +42,14 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
     if num_descriptions > 1:
         # random description
         c = random.randint(0, num_descriptions-1)
-        logging.debug(f'prepare batch randomized caption {c} of {num_descriptions}')
+        logging.debug(f'prepare batch randomized caption {c} of {num_descriptions-1}')
         captions = [caption[c] for caption in batch['captions']]
 
     else:
         # only one description
         logging.debug(f'prepare batch, only one caption')
         captions = batch['captions']
+        # print(captions)
 
     # print(len(captions), embeds.shape)
     return {'captions': captions, 'embeddings': embeds}
@@ -56,7 +57,7 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
           full_finetune, add_noise, variance, save_history, dataset, root, dimension, log_step,
-          normalize):
+          normalize, patch, before, gradient_accumulation_steps):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # data
@@ -70,6 +71,11 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     elif dataset == 'petro':
         train_data = PetroDataset(filename, split='train')
         val_data = PetroDataset(filename, split='val')
+
+    elif dataset == 'cego':
+        train_data = PetroDataset(filename, None)
+        val_name = filename.replace('train', 'val')
+        val_data = PetroDataset(val_name, None)
 
     elif dataset == 'petro-txt':
         train_data = TextLoader(filename, split='train')
@@ -92,7 +98,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       add_noise=add_noise,
                       variance=variance,
                       dimension=dimension,
-                      normalize=normalize)
+                      normalize=normalize,
+                      prefix_before_bos=before)
 
     if not full_finetune:
         # model was adapted before, load existing adapter to continue training
@@ -108,47 +115,57 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
     optim = AdamW(decoder.parameters(), lr=lr)
 
     logging.debug('DECODER SIZE')
-    logging.debug(model_size(decoder.model))
+    # logging.debug(model_size(decoder.model))
     logging.debug(learnable_parameters(decoder.model))
 
     logging.debug('MAPPER SIZE')
-    logging.debug(model_size(decoder.mapper))
+    # logging.debug(model_size(decoder.mapper))
     logging.debug(learnable_parameters(decoder.mapper))
 
     training_losses = []
     validation_losses = []
 
+    if log_step is None:
+        log_step = len(train_loader)
+
     # training loop
     for epoch in range(epochs):
         log_loss = []
+
         i = 0
         # print(f'batches {len(train_loader)}')
         for batch in tqdm(train_loader, total=len(train_loader)):
-            batch = prepare_batch(batch, text_only, device, num_descriptions=num_captions)
-            optim.zero_grad()
+            batch = prepare_batch(batch, text_only, patch, device, num_descriptions=num_captions)
             output = decoder(batch)
-            output.loss.backward()
-            optim.step()
+            loss = output.loss / gradient_accumulation_steps
+            loss.backward()
+
+            if (i + 1) % gradient_accumulation_steps == 0 or i == len(train_loader) - 1:
+                logging.debug('Gradient accumulation step {}'.format(i + 1))
+                optim.zero_grad()
+                optim.step()
 
             i += 1
-            loss = output.loss.detach().cpu().item()
+            loss = loss.detach().cpu().item()
             log_loss.append(loss)
 
-            # logging
-            if i % log_step == 0 or i == len(train_loader):
-
+            # logging and validation
+            if (i + 1) % log_step == 0 or i == len(train_loader)-1:
+                logging.debug('Logging step {}'.format(i + 1))
                 # validation
                 log_val_losses = []
-                decoder.eval()
-                decoder.add_noise = False
-                for val_batch in val_loader:
-                    flag = True if dataset == 'petro-txt' else False
-                    logging.debug(f'validation using text embedding? {flag}')
-                    val_batch = prepare_batch(val_batch, flag, device, num_descriptions=num_captions)
+                with torch.no_grad():
+                    # noise may be used during training
+                    decoder.add_noise = False
+                    for val_batch in val_loader:
+                        # validate using text embeddings in text only training
+                        flag = True if dataset == 'petro-txt' else False
+                        logging.debug(f'validation using text embedding? {flag}')
+                        val_batch = prepare_batch(val_batch, flag, patch, device, num_descriptions=num_captions)
 
-                    with torch.no_grad():
-                        val_output = decoder(val_batch)
-                        log_val_losses.append(val_output.loss.detach().cpu().item())
+                        with torch.no_grad():
+                            val_output = decoder(val_batch)
+                            log_val_losses.append(val_output.loss.detach().cpu().item())
 
                 # save step loss and clean list
                 validation_losses.append(sum(log_val_losses) / len(log_val_losses))
@@ -206,12 +223,16 @@ if __name__ == '__main__':
     parser.add_argument('--noise', action='store_true', help='add noise to embeddings', default=False)
     parser.add_argument('--variance', type=float, help='variance for noise injection', default=0.016)
     parser.add_argument('--history', action='store_true', help='save epoch history', default=False)
-    parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'petro', 'petro-txt'], help='dataset name')
+    parser.add_argument('--dataset', type=str, default='coco', help='dataset name',
+                        choices=['coco', 'petro', 'petro-txt', 'cego', 'mimic'], )
     parser.add_argument('--save_path', required=True, help='root dir for saving results')
     parser.add_argument('--dimension', default=768, type=int, help='embedding dimension')
     parser.add_argument('--normalize', action='store_true', help='normalize embeddings', default=False)
-    parser.add_argument('--log_step', type=int, default=5000, help='log step')
+    parser.add_argument('--log_step', type=int, default=None, help='log step')
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
+    parser.add_argument('--patched', action='store_true', help='use patches', default=False)
+    parser.add_argument('--before', action='store_true', help='prefix before begin of sentence token', default=False)
+    parser.add_argument('--grad_accumulation', default=1, help='accumulate gradients', type=int)
     args = parser.parse_args()
 
     logger = logging.getLogger('captioning')
@@ -235,7 +256,7 @@ if __name__ == '__main__':
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
-          args.normalize)
+          args.normalize, args.patched, args.before, args.grad_accumulation)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

@@ -57,7 +57,7 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
           full_finetune, add_noise, variance, save_history, dataset, root, dimension, log_step,
-          normalize, patch, before, gradient_accumulation_steps):
+          normalize, patch, before, gradient_accumulation_steps, add_end_of_sentence):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # data
@@ -99,7 +99,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       variance=variance,
                       dimension=dimension,
                       normalize=normalize,
-                      prefix_before_bos=before)
+                      prefix_before_bos=before,
+                      add_end_of_sentence=add_end_of_sentence)
 
     if not full_finetune:
         # model was adapted before, load existing adapter to continue training
@@ -233,6 +234,7 @@ if __name__ == '__main__':
     parser.add_argument('--patched', action='store_true', help='use patches', default=False)
     parser.add_argument('--before', action='store_true', help='prefix before begin of sentence token', default=False)
     parser.add_argument('--grad_accumulation', default=1, help='accumulate gradients', type=int)
+    parser.add_argument('--add_eos', action='store_true', default=False, help='append end of sentence token')
     args = parser.parse_args()
 
     logger = logging.getLogger('captioning')
@@ -256,7 +258,7 @@ if __name__ == '__main__':
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
-          args.normalize, args.patched, args.before, args.grad_accumulation)
+          args.normalize, args.patched, args.before, args.grad_accumulation, args.add_eos)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

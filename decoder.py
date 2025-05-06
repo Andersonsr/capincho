@@ -107,11 +107,11 @@ class Decoder(nn.Module):
 
         logging.debug(f'forward, prefix embeddings shape: {prefix_tokens.shape}')
 
-        captions_emb = self.get_input_embeds(captions).to(dtype=self.fp, device=device)
+        captions_emb = self.get_input_embeds(captions).to(dtype=self.fp, device=self.device)
         if self.add_end_of_sentence:
             captions_emb = torch.concat([captions_emb, captions_emb[:, :1, :]], dim=1)
 
-        print("bos ", captions_emb[:, :1, :].shape)
+        # print("bos ", captions_emb[:, :1, :].shape)
         logging.debug(f'forward, captions embeddings shape: {captions_emb.shape}')
 
         if len(captions_emb.shape) == 2:

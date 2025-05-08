@@ -40,7 +40,7 @@ if __name__ == '__main__':
         image_name = '/'.join(annotation['image'].split('/')[1:])
         image_path = os.path.join(args.dataset_root, image_name)
         if os.path.exists(image_path):
-            image = model.prepare_image(image_path)
+            image = model.prepare_image(image_path).detach().cpu()
             data['id'].append(i)
             data['image_name'].append(image_name)
             data['image_path'].append(image_path)

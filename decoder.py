@@ -126,7 +126,6 @@ class Decoder(nn.Module):
 
         # labels for auto regressive CE training
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
-
         logging.debug('labels shape: {}'.format(labels.shape))
 
         # ignore padding tokens, OPT ignores -100 labels during loss computation
@@ -231,6 +230,7 @@ if '__main__' == __name__:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger = logging.getLogger('captioning')
     logging.basicConfig(level=logging.DEBUG)
+
     # model
     decoder = Decoder('facebook/opt-350m', device,
                       prefix_length=2,

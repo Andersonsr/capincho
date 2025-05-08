@@ -61,7 +61,7 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5, break_lin
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
           full_finetune, add_noise, variance, save_history, dataset, root, dimension, log_step,
-          normalize, patch, before, gradient_accumulation_steps, break_line):
+          normalize, patch, before, break_line):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # data
@@ -139,17 +139,13 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         i = 0
         # print(f'batches {len(train_loader)}')
         for batch in tqdm(train_loader, total=len(train_loader)):
+            i += 1
+            optim.zero_grad()
             batch = prepare_batch(batch, text_only, patch, device, num_descriptions=num_captions, break_line=break_line)
             output = decoder(batch)
-            loss = output.loss / gradient_accumulation_steps
+            loss = output.loss
             loss.backward()
-
-            if (i + 1) % gradient_accumulation_steps == 0 or i == len(train_loader) - 1:
-                logging.debug('Gradient accumulation step {}'.format(i + 1))
-                optim.zero_grad()
-                optim.step()
-
-            i += 1
+            optim.step()
             loss = loss.detach().cpu().item()
             log_loss.append(loss)
 
@@ -236,7 +232,6 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     parser.add_argument('--patched', action='store_true', help='use patches', default=False)
     parser.add_argument('--before', action='store_true', help='prefix before begin of sentence token', default=False)
-    parser.add_argument('--grad_accumulation', default=1, help='accumulate gradients', type=int)
     parser.add_argument('--break_lines', action='store_true',
                         help='break string separated by new line, and user the first part only', default=False)
     args = parser.parse_args()
@@ -262,7 +257,7 @@ if __name__ == '__main__':
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
-          args.normalize, args.patched, args.before, args.grad_accumulation, args.break_line)
+          args.normalize, args.patched, args.before, args.break_lines)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

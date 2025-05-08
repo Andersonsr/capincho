@@ -1,13 +1,13 @@
+from tqdm import tqdm
+from PIL import Image
 import glob
 import cv2 as cv
 import pandas as pd
 import pickle
-import clip
 import torch
-from PIL import Image
-import re
+import json
+import os
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 def pkl_to_xlsx(pkl_file: str, xlsx_file: str):
@@ -104,12 +104,7 @@ def generate_dummy_texts(n=36):
         pickle.dump(dummy_texts, f)
 
 
-
-
 def fixDataCego():
-    import pickle
-    import json
-    from tqdm import tqdm
     dataset_path = '/mnt/d/PraCegoVer/pracegover_400k.json'
     name_root = 'embeddings/foundation/cego_openclip'
 
@@ -128,11 +123,27 @@ def fixDataCego():
                     pickle.dump(data, fixed)
 
 
+def shuffle_pkl(in_path, out_path):
+    with open(in_path, 'rb') as f:
+        data = pickle.load(f)
+        df = pd.DataFrame.from_dict(data)
+        df = df.sample(frac=1).reset_index(drop=True)
+        data = df.to_dict('list')
+        with open(out_path, 'wb') as f2:
+            pickle.dump(data, f2)
+
+
+def mimic_stats(filename, dataset_root):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+        for annotation in data:
+            image_name = '/'.join(annotation['image'].split('/')[1:])
+            image_path = os.path.join(dataset_root, image_name)
+            im = cv.imread(image_path)
+            print(im.shape)
+            break
+
+
 if __name__ == '__main__':
-    import cv2
-    from PIL import Image
-    image_path = '/mnt/d/PraCegoVer/images/i-00000008.jpg'
-    image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
-    image = Image.fromarray(image).convert('RGB')
-    image.save('plots/converted.png')
+    mimic_stats('/')
 

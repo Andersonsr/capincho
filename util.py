@@ -68,24 +68,3 @@ def split_sentence(sentence, limit):
     return new_text
 
 
-def shuffle_pkl(in_path, out_path):
-    import pandas as pd
-    import pickle
-    with open(in_path, 'rb') as f:
-        data = pickle.load(f)
-        df = pd.DataFrame.from_dict(data)
-        df = df.sample(frac=1).reset_index(drop=True)
-        data = df.to_dict('list')
-        with open(out_path, 'wb') as f2:
-            pickle.dump(data, f2)
-
-
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--in_path', type=str, required=True)
-    parser.add_argument('--out_path', type=str, required=True)
-    args = parser.parse_args()
-
-    shuffle_pkl(args.in_path, args.out_path)
-

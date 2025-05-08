@@ -16,7 +16,7 @@ from util import model_size, learnable_parameters
 # TODO: juntar os patches antes do mapper ou usar cross attention.
 
 
-def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
+def prepare_batch(batch, text_only, patch, device, num_descriptions=5, break_line=False):
     '''
     Prepare the batch to be forwarded to the model
     :param batch: batch to be processed
@@ -24,6 +24,7 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
     :param patch: patch embeddings
     :param device: device to use for computation
     :param num_descriptions: total number of descriptions for each image, used to randomize the captioning
+    :param break_line: break caption separated by new line character
     :return: object with keys 'caption' and 'embeddings'
     '''
 
@@ -51,13 +52,16 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5):
         captions = batch['captions']
         # print(captions)
 
+    if break_line:
+        captions = [s.split('\n')[0] for s in captions]
+
     # print(len(captions), embeds.shape)
     return {'captions': captions, 'embeddings': embeds}
 
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
           full_finetune, add_noise, variance, save_history, dataset, root, dimension, log_step,
-          normalize, patch, before, gradient_accumulation_steps):
+          normalize, patch, before, gradient_accumulation_steps, break_line):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # data
@@ -135,7 +139,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         i = 0
         # print(f'batches {len(train_loader)}')
         for batch in tqdm(train_loader, total=len(train_loader)):
-            batch = prepare_batch(batch, text_only, patch, device, num_descriptions=num_captions)
+            batch = prepare_batch(batch, text_only, patch, device, num_descriptions=num_captions, break_line=break_line)
             output = decoder(batch)
             loss = output.loss / gradient_accumulation_steps
             loss.backward()
@@ -233,6 +237,8 @@ if __name__ == '__main__':
     parser.add_argument('--patched', action='store_true', help='use patches', default=False)
     parser.add_argument('--before', action='store_true', help='prefix before begin of sentence token', default=False)
     parser.add_argument('--grad_accumulation', default=1, help='accumulate gradients', type=int)
+    parser.add_argument('--break_lines', action='store_true',
+                        help='break string separated by new line, and user the first part only', default=False)
     args = parser.parse_args()
 
     logger = logging.getLogger('captioning')
@@ -256,7 +262,7 @@ if __name__ == '__main__':
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
-          args.normalize, args.patched, args.before, args.grad_accumulation)
+          args.normalize, args.patched, args.before, args.grad_accumulation, args.break_line)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

@@ -77,7 +77,7 @@ if __name__ == '__main__':
                                num_beams=args.num_beams,
                                temperature=args.temperature,
                                do_sample=args.do_sample,
-                               penalty_alpha=args.penalty,
+                               penalty_alpha=args.penalty_alpha,
                                diversity_penalty=args.diversity_penalty)
         generated.append(output[0])
 

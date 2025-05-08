@@ -18,7 +18,7 @@ logger = logging.getLogger('captioning')
 
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=False, variance=0.016,
-                 dimension=768, normalize=False, prefix_before_bos=False, add_end_of_sentence=False):
+                 dimension=768, normalize=False, prefix_before_bos=False):
         super(Decoder, self).__init__()
         self.device = device
         self.before_bos = prefix_before_bos
@@ -42,7 +42,7 @@ class Decoder(nn.Module):
         self.fp = precision
         self.mapper = Mapper(dimension, self.hidden_size, self.prefix_length).to(dtype=precision)
         self.normalize = normalize
-        self.add_end_of_sentence = add_end_of_sentence
+
         if self.device:
             self.model.to(self.device)
             self.mapper.to(self.device)
@@ -89,7 +89,7 @@ class Decoder(nn.Module):
     def forward(self, batch):
         embeddings = batch['embeddings'].to(dtype=self.fp)
         captions = batch['captions']
-
+        logging.debug(f'forward, input embeddings shape: {embeddings.shape}')
         if self.add_noise:
             embeddings = self.noise_injection(embeddings)
         if self.device:
@@ -101,15 +101,12 @@ class Decoder(nn.Module):
         b, p, d = embeddings.shape
         embeddings = embeddings.view(b*p, 1, d)
 
-        logging.debug(f'forward, input embeddings shape: {embeddings.shape}')
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)
         prefix_tokens = prefix_tokens.view(b, p*self.prefix_length, self.hidden_size)
 
         logging.debug(f'forward, prefix embeddings shape: {prefix_tokens.shape}')
 
         captions_emb = self.get_input_embeds(captions).to(dtype=self.fp, device=self.device)
-        if self.add_end_of_sentence:
-            captions_emb = torch.concat([captions_emb, captions_emb[:, :1, :]], dim=1)
 
         # print("bos ", captions_emb[:, :1, :].shape)
         logging.debug(f'forward, captions embeddings shape: {captions_emb.shape}')
@@ -129,10 +126,6 @@ class Decoder(nn.Module):
 
         # labels for auto regressive CE training
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
-
-        # append start of sentence token to the end of sentence
-        if self.add_end_of_sentence:
-            labels = torch.cat([labels, labels[:, :1]], dim=1)
 
         logging.debug('labels shape: {}'.format(labels.shape))
 
@@ -243,8 +236,7 @@ if '__main__' == __name__:
                       prefix_length=2,
                       dimension=768,
                       normalize=True,
-                      prefix_before_bos=args.before,
-                      add_end_of_sentence=True)
+                      prefix_before_bos=args.before,)
 
     output = decoder.tokenizer('outro texto de teste para teste de texto')
     print(output, )

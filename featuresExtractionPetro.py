@@ -1,10 +1,33 @@
 import argparse
+import os
 import pickle
 from tqdm import tqdm
 import pandas as pd
 from foundation_models import model_dict
 import torch
 import logging
+from torch.utils.data import Dataset
+import numpy as np
+
+
+class PetroXLSLoader(Dataset):
+    def __init__(self,filepath):
+        assert os.path.exists(filepath)
+        df = pd.read_excel(args.path)
+        self.text = df['text'].tolist()
+        self.cd_guid = df['cd_guid'].tolist()
+
+    def __len__(self):
+        return len(self.cd_guid)
+
+    def __getitem__(self, index):
+        return {'text': self.text[index], 'cd_guid': self.cd_guid[index]}
+
+    def get_loader(self, batch_size):
+        indices = np.arange(len(self.cd_guid))
+        sampler = torch.utils.data.SequentialSampler(indices)
+        return torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='download and extract features from petro dataset')
@@ -26,39 +49,34 @@ if __name__ == '__main__':
     model.load_model()
     model.backbone.eval()
 
-    df = pd.read_excel(args.path)
+    dataset_petro = PetroXLSLoader(args.path)
     text_embeddings = []
     image_embeddings = []
 
-    data = {'captions': df['text'].tolist(),
-            'image_id': df['cd_guid'].tolist(),
+    data = {'captions': dataset_petro.text,
+            'image_id': dataset_petro.cd_guid,
             'image_embeddings': [],
             'text_embeddings': []}
 
     if args.patched:
         data['patch_embeddings'] = []
 
+    loader = dataset_petro.get_loader()
     # extraction loop
-    for i, row in tqdm(df.iterrows()):
-        id = row['cd_guid']
+    for batch in tqdm(loader):
+        id = batch['cd_guid']
         img_path = f'{args.root}/{id}.png'
         vis_embed = model.visual_embedding(img_path, args.resize)
-        txt_embed = model.language_embedding(row['text'])
-        data['text_embeddings'].append(txt_embed.detach().cpu())
-        data['image_embeddings'].append(vis_embed.detach().cpu())
+        txt_embed = model.language_embedding(batch['text'])
+        data['text_embeddings'] += txt_embed.detach().cpu()
+        data['image_embeddings'] += vis_embed.detach().cpu()
 
-        if args.patched:
-            patches_embeds = model.patch_embedding(img_path)
-            logger.debug('Patches embedding shape: {}x{}x{}'.format(
-                patches_embeds.shape[0], patches_embeds.shape[1], patches_embeds.shape[2]))
-
-            data['patch_embeddings'].append(patches_embeds)
-
-        logging.debug(f'text embeddings size: {len(text_embeddings)}')
-        logging.debug(f'image embeddings size: {len(image_embeddings)}')
+        logging.debug(f'image embeddings shape: {vis_embed.shape}')
+        logging.debug(f'text embeddings shape: {txt_embed.shape}')
 
     logging.debug(f'caption sample {data["captions"][0]}')
-
+    data['image_embeddings'] = torch.cat(data['image_embeddings']).unsqueeze(dim=1)
+    data['text_embeddings'] = torch.cat(data['text_embeddings']).unsqueeze(dim=1)
     with open(args.output, 'wb') as f:
         pickle.dump(data, f)
 

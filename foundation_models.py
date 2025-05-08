@@ -78,9 +78,17 @@ class Model(ABC):
 
         return torch.stack(patches_embeddings)
 
+    def visual_embedding(self, image, resize=False, crop=False):
+        if type(image) is str:
+            image = self.prepare_image(image, resize, crop)
+            return self.backbone.encode_image(image)
+        else:
+            return self.backbone.encode_image(image)
+
     # TODO: adicionar crop central para imagens que nao sao quadradas
-    def visual_embedding(self, image_path, resize=False, crop=False):
+    def prepare_image(self, image_path, resize=False, crop=False):
         # opencv works better when reading big images
+        # print(image_path)
         image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
         image = Image.fromarray(image).convert('RGB')
         if resize and image.size[0] > self.dim:
@@ -88,8 +96,7 @@ class Model(ABC):
             image = image.resize((self.dim, self.dim))
             logger.debug('resize image: {}x{}'.format(image.size[0], image.size[1]))
 
-        image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
-        return self.backbone.encode_image(image)
+        return self.vision_preprocess(image).unsqueeze(0).to(self.device)
 
 
 class CLIP(Model):
@@ -103,6 +110,7 @@ class CLIP(Model):
         with torch.no_grad():
             text = clip.tokenize(text, context_length=77, truncate=True).to(self.device)
             return self.backbone.encode_text(text)
+
 
 class OpenCoCa(Model):
     def language_embedding(self, text):

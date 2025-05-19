@@ -32,3 +32,4 @@ CLIP-LoRA
 Llip
 hardcodedEval.py
 mimic-code
+src/__pycache__/

@@ -18,7 +18,7 @@ logger = logging.getLogger('captioning')
 
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=False, variance=0.016,
-                 dimension=768, normalize=False, prefix_before_bos=False):
+                 dimension=768, normalize=False, prefix_before_bos=False, append_eos=False):
         super(Decoder, self).__init__()
         self.device = device
         self.before_bos = prefix_before_bos
@@ -35,6 +35,10 @@ class Decoder(nn.Module):
             self.tokenizer = T5Tokenizer.from_pretrained(model_name)
             self.model = T5ForConditionalGeneration.from_pretrained(model_name)
 
+        else:
+            raise ValueError(f'{model_name} not supported')
+
+        self.append_eos = append_eos
         self.add_noise = add_noise
         self.variance = variance
         self.hidden_size = self._get_hidden_size()
@@ -63,12 +67,15 @@ class Decoder(nn.Module):
         logging.debug(f'prefix shape: {prefix.shape}')
 
         # id do token de inicio de frase
-        bos = torch.ones((1, 1)).to(dtype=torch.long) * 2
-        bos = bos.to(self.device)
+        bos_token = torch.ones((1, 1)).to(dtype=torch.long) * 2
+        bos_token = bos_token.to(self.device)
         embeddings_layer = self.model.get_input_embeddings()
-        bos = embeddings_layer(bos)
-        if not self.before_bos:
-            prefix = torch.concat([bos, prefix], dim=1)
+        bos_embeddings = embeddings_layer(bos_token)
+
+        if self.before_bos:
+            prefix = torch.concat([prefix, bos_embeddings], dim=1)
+        else:
+            prefix = torch.concat([bos_embeddings, prefix], dim=1)
 
         logging.debug(f'concatenated shape: {prefix.shape}')
 
@@ -89,7 +96,7 @@ class Decoder(nn.Module):
     def forward(self, batch):
         embeddings = batch['embeddings'].to(dtype=self.fp)
         captions = batch['captions']
-        logging.debug(f'forward, input embeddings shape: {embeddings.shape}')
+        logging.debug(f'input embeddings shape: {embeddings.shape}')
         if self.add_noise:
             embeddings = self.noise_injection(embeddings)
         if self.device:
@@ -104,16 +111,16 @@ class Decoder(nn.Module):
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)
         prefix_tokens = prefix_tokens.view(b, p*self.prefix_length, self.hidden_size)
 
-        logging.debug(f'forward, prefix embeddings shape: {prefix_tokens.shape}')
+        logging.debug(f'Mapper output: {prefix_tokens.shape}')
 
         captions_emb = self.get_input_embeds(captions).to(dtype=self.fp, device=self.device)
 
         # print("bos ", captions_emb[:, :1, :].shape)
-        logging.debug(f'forward, captions embeddings shape: {captions_emb.shape}')
+        logging.debug(f'captions embeddings shape: {captions_emb.shape}')
 
         if len(captions_emb.shape) == 2:
             captions_emb = captions_emb.unsqueeze(0)
-            logging.debug(f'forward, captions embeddings unsqueeze shape: {captions_emb.shape}')
+            logging.debug(f' captions embeddings unsqueeze shape: {captions_emb.shape}')
 
         # final shape [batch, sos + prefix + caption len-1, d_model]
         if self.before_bos:
@@ -126,6 +133,17 @@ class Decoder(nn.Module):
 
         # labels for auto regressive CE training
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
+        if self.append_eos:
+            # 2 is the token for eos and bos
+            bos_token = torch.ones((labels.shape[0], 1)).to(dtype=torch.long) * 2
+            bos_token = bos_token.to(self.device)
+            embeddings_layer = self.model.get_input_embeddings()
+            bos_embeddings = embeddings_layer(bos_token)
+
+            # concatenate eos to labels and input embeddings
+            labels = torch.cat([labels, bos_token], dim=1)
+            input_emb = torch.cat((input_emb, bos_embeddings), dim=1)
+
         logging.debug('labels shape: {}'.format(labels.shape))
 
         # ignore padding tokens, OPT ignores -100 labels during loss computation
@@ -216,7 +234,7 @@ def model_from_json(json_file, device):
 
 
 if '__main__' == __name__:
-    from embeddingsDataset import COCODataset
+    from dataLoaders import COCODataset
     from trainDecoder import prepare_batch
     parser = argparse.ArgumentParser()
     parser.add_argument('--embeddings',

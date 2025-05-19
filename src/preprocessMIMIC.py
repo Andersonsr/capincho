@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, required=True, help='output directory')
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     parser.add_argument('--dim', type=int, default=224, help='output image dimension')
+    parser.add_argument('--chunk_size', type=int, default=50000, help='data chunk size')
 
     args = parser.parse_args()
 
@@ -49,7 +50,7 @@ if __name__ == '__main__':
 
             logging.debug('image {} shape: {}'.format(i, image.size))
             
-        if i % 50000 == 0 or i == len(json_file) - 1:
+        if (i+1) % args.chunk_size == 0 or i == len(json_file) - 1:
             # save the chunk
             logging.info('chunk {}: {} images'.format(chunk_counter, len(data['image_name'])))
             with open(os.path.join(args.output, f'chunk_{chunk_counter}.pkl'), 'wb') as f:

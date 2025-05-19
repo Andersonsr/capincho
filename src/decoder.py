@@ -139,7 +139,7 @@ class Decoder(nn.Module):
             embeddings_layer = self.model.get_input_embeddings()
             bos_embeddings = embeddings_layer(bos_token).to(self.device)
 
-            # concatenate eos to labels and input embeddings
+            # concatenate eos/bos to labels and input embeddings
             labels = torch.cat([labels, bos_token], dim=1)
             input_emb = torch.cat((input_emb, bos_embeddings), dim=1)
 
@@ -150,9 +150,6 @@ class Decoder(nn.Module):
 
         # ignore prefix, set labels to skip prefix during loss computation
         ignore_size = self.prefix_length*p
-        if self.before_bos:
-            ignore_size += 1
-
         ignore = torch.ones(input_emb.shape[0],  ignore_size) * -100
         logging.debug('ignore shape: {}'.format(ignore.shape))
 
@@ -161,7 +158,7 @@ class Decoder(nn.Module):
         input_emb = input_emb.to(self.device)
         # concatenate prefix labels (-100) and text labels
         if self.before_bos:
-            labels = torch.concat([ignore, labels[:, 1:]], dim=1)
+            labels = torch.concat([ignore, labels], dim=1)
 
         else:
             labels = torch.concat([labels[:, :1], ignore, labels[:, 1:]], dim=1)
@@ -169,8 +166,8 @@ class Decoder(nn.Module):
         logging.debug('final labels shape: {}'.format(labels.shape))
         return self.model(inputs_embeds=input_emb, labels=labels.to(torch.long))
 
-    def get_input_embeds(self, prompt):
-        input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True).input_ids.to(self.device).squeeze(0)
+    def get_input_embeds(self, text):
+        input_ids = self.tokenizer(text, return_tensors="pt", padding=True).input_ids.to(self.device).squeeze(0)
         embeddings_layer = self.model.get_input_embeddings()
         return embeddings_layer(input_ids)
 

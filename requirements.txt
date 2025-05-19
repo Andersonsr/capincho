@@ -3,12 +3,10 @@ huggingface-hub
 matplotlib
 open_clip_torch
 peft
+torch==2.6.0
 pillow
-torch
-torchvision
 tqdm
 setuptools
-safetensors
 datasets
 openpyxl
 datasets

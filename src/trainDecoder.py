@@ -62,6 +62,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
           normalize, patch, before, break_line, append_eos):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info('model device {}'.format(device))
     # data
     num_captions = 1
     if dataset == 'coco':
@@ -245,6 +246,7 @@ if __name__ == '__main__':
     precision = torch.float16 if args.fp == 'fp16' else torch.float32
     logging.debug(f'precision: {precision}')
     cfg_path = os.path.join(args.model_name, 'adapter_config.json')
+
     if os.path.exists(cfg_path):
         logging.debug('decoder was adapted before')
         with open(cfg_path, 'rb') as f:

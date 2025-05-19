@@ -22,7 +22,6 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.device = device
         self.before_bos = prefix_before_bos
-        logging.info('decoder device {}'.format(device))
 
         if 'opt' in model_name:
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -77,7 +76,7 @@ class Decoder(nn.Module):
         else:
             prefix = torch.concat([bos_embeddings, prefix], dim=1)
 
-        logging.debug(f'concatenated shape: {prefix.shape}')
+        logging.debug(f'decoder input shape: {prefix.shape}')
 
         generated_ids = self.model.generate(do_sample=do_sample,
                                             max_new_tokens=max_tokens,
@@ -89,10 +88,10 @@ class Decoder(nn.Module):
                                             penalty_alpha=penalty_alpha,
                                             diversity_penalty=diversity_penalty)
 
+        logging.debug(f'Generated ids: {generated_ids}')
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     # TODO: adicionar opcao para achatar as embeddings dos patches e alterar o tamanho da entrada do mapper de acordo
-    # TODO: adicionar opcao para colocar o token de inicio/fim de frase, OPT nao usa por default.
     def forward(self, batch):
         embeddings = batch['embeddings'].to(dtype=self.fp)
         captions = batch['captions']
@@ -132,13 +131,13 @@ class Decoder(nn.Module):
         logging.debug(f'concatenated embeddings final shape: {input_emb.shape}')
 
         # labels for auto regressive CE training
-        labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.fp)
+        labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.device, dtype=self.fp)
         if self.append_eos:
             # 2 is the token for eos and bos
             bos_token = torch.ones((labels.shape[0], 1)).to(dtype=torch.long) * 2
             bos_token = bos_token.to(self.device)
             embeddings_layer = self.model.get_input_embeddings()
-            bos_embeddings = embeddings_layer(bos_token)
+            bos_embeddings = embeddings_layer(bos_token).to(self.device)
 
             # concatenate eos to labels and input embeddings
             labels = torch.cat([labels, bos_token], dim=1)

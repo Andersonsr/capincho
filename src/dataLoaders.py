@@ -1,5 +1,8 @@
 import argparse
+import gc
+import glob
 import logging
+from tqdm import tqdm
 import os.path
 import pickle
 import numpy as np
@@ -70,6 +73,85 @@ class PetroDataset(Dataset):
         sampler = torch.utils.data.SequentialSampler(indices)
         loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
         return loader, indices
+
+
+class MIMICLoader(Dataset):
+    def __init__(self, dirname, chunks=None):
+        assert os.path.exists(dirname), '{} does not exist'.format(dirname)
+        self.chunks = glob.glob(os.path.join(dirname, '*.pkl'))
+
+        assert len(self.chunks) > 0, 'No .pkl files found in {}'.format(dirname)
+        self.chunks.sort(key=lambda x: int(os.path.basename(x).split('_')[1]))
+        if chunks is not None:
+            assert chunks < len(self.chunks), '{} exceeds number of chunks'.format(chunks)
+            self.chunks = self.chunks[:chunks]
+
+        self.len = sum([len(pickle.load(open(d, 'rb'))['image_id']) for d in self.chunks])
+        self.data = {}
+        self.current_chunk = 0
+        self.offset = 0
+        self.limit = 0
+        self.load_chunk(0)
+
+        logging.debug('Chunks found: {}'.format(len(self.chunks)))
+        logging.debug('total length of chunks: {}'.format(self.len))
+
+    def free_data(self):
+        # free memory to load next chunk
+        self.data = None
+        gc.collect()
+
+    def load_chunk(self, index):
+        assert 0 <= index <= len(self.chunks), 'index out of range'
+        logging.info('loading chunk {}'.format(index))
+        with open(self.chunks[index], 'rb') as f:
+            if index == 0:
+                # reset chunks
+                self.current_chunk = 0
+                self.offset = 0
+                self.free_data()
+                self.data = pickle.load(f)
+                self.limit = len(self.data['image_id'])
+
+            else:
+                assert index == self.current_chunk + 1, 'chunks must be loaded in order'
+                # loading next chunk
+                self.current_chunk = index
+                self.offset += len(self.data['image_id'])
+                self.free_data()
+                self.data = pickle.load(f)
+                self.limit += len(self.data['image_id'])
+
+        logging.debug(f'limit {self.limit}, offset {self.offset}, current chunk {self.current_chunk}')
+
+    def __len__(self):
+        return len(self.data['id'])
+
+    def __getitem__(self, index):
+        if index == 0:
+            self.free_data()
+            self.load_chunk(0)
+
+        elif index >= self.limit:
+            if self.current_chunk == len(self.chunks) - 1:
+                # last chunk, reset iteration
+                self.load_chunk(0)
+
+            else:
+                # load next chunk
+                self.load_chunk(self.current_chunk+1)
+
+        return {'image_id': self.data['image_id'][index-self.offset],
+                'image_name': self.data['image_name'][index-self.offset],
+                'image_embeddings': self.data['image_embeddings'][index-self.offset],
+                'text_embeddings': self.data['text_embeddings'][index-self.offset],
+                'captions': self.data['captions'][index-self.offset],
+                'labels': self.data['labels'][index-self.offset]}
+
+    def get_loader(self, batch_size):
+        indices = np.arange(self.len)
+        sampler = torch.utils.data.SequentialSampler(indices)
+        return torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
 
 
 class COCODataset(Dataset):
@@ -170,33 +252,28 @@ class COCODataset(Dataset):
 
 
 if __name__ == '__main__':
+    # debugging only
     parser = argparse.ArgumentParser('check output format')
     parser.add_argument('--dataset', type=str, required=True, help='dataset name',
-                        choices=['coco', 'petro', 'cego'])
+                        choices=['coco', 'mimic', 'petro', 'cego'])
     parser.add_argument('--path', type=str, required=True, help='path to dataset')
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger = logging.getLogger('captioning')
     logging.basicConfig(level=logging.DEBUG)
-    from trainDecoder import prepare_batch
 
     if args.dataset == 'coco':
         dataset = COCODataset(args.path)
     elif args.dataset == 'petro':
         dataset = PetroDataset(args.path, split='train')
+    elif args.dataset == 'mimic':
+        dataset = MIMICLoader(args.path)
     else:
         raise ValueError('dataset not supported, choices=[petro, coco]')
 
-    loader, indices = dataset.get_loader(batch_size=4)
+    loader = dataset.get_loader(batch_size=4)
     print(f'batches: {len(loader)}')
-    for batch in loader:
-        print(batch['text_embeddings'].shape)
-        print(batch['image_embeddings'].shape)
-        print(len(batch['image_id']))
-        print(len(batch['captions']))
-        batch = prepare_batch(batch, False, False, device, num_descriptions=1)
-        print(batch['embeddings'].shape)
-
-        break
-
+    for epoch in range(3):
+        for batch in tqdm(loader):
+            pass
 

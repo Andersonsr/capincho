@@ -85,8 +85,7 @@ if __name__ == '__main__':
     data['labels'] = json_data.labels
     data['image_embeddings'] = torch.stack(data['image_embeddings'], dim=0).unsqueeze(dim=1)
     data['text_embeddings'] = torch.stack(data['text_embeddings'], dim=0).unsqueeze(dim=1)
-    print(data['image_embeddings'].shape)
-    print(data['text_embeddings'].shape)
+    
     with open(args.output, 'wb') as f:
         pickle.dump(data, f)
 

@@ -2,7 +2,7 @@ import argparse
 import logging
 import random
 import torch
-from embeddingsDataset import PetroDataset, COCODataset
+from dataLoaders import PetroDataset, COCODataset
 from decoder import model_from_json
 from tqdm import tqdm
 from textLoader import TextLoader

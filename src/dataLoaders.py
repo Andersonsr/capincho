@@ -71,8 +71,7 @@ class PetroDataset(Dataset):
         '''
         indices = np.arange(len(self.image_embeddings))
         sampler = torch.utils.data.SequentialSampler(indices)
-        loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
-        return loader, indices
+        return torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
 
 
 class MIMICLoader(Dataset):
@@ -91,7 +90,6 @@ class MIMICLoader(Dataset):
         self.current_chunk = 0
         self.offset = 0
         self.limit = 0
-        self.load_chunk(0)
 
         logging.debug('Chunks found: {}'.format(len(self.chunks)))
         logging.debug('total length of chunks: {}'.format(self.len))
@@ -125,7 +123,7 @@ class MIMICLoader(Dataset):
         logging.debug(f'limit {self.limit}, offset {self.offset}, current chunk {self.current_chunk}')
 
     def __len__(self):
-        return len(self.data['id'])
+        return self.len
 
     def __getitem__(self, index):
         if index == 0:
@@ -151,7 +149,27 @@ class MIMICLoader(Dataset):
     def get_loader(self, batch_size):
         indices = np.arange(self.len)
         sampler = torch.utils.data.SequentialSampler(indices)
-        return torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False)
+        return torch.utils.data.DataLoader(self,
+                                           batch_size=batch_size,
+                                           sampler=sampler,
+                                           shuffle=False,
+                                           collate_fn=self.collate_fn)
+
+    def collate_fn(self, batch):
+        data = {'image_id': [],
+                'image_name': [],
+                'image_embeddings': [],
+                'text_embeddings': [],
+                'captions': [],
+                'labels': []}
+
+        for e in batch:
+            for key in e.keys():
+                data[key].append(e[key])
+
+        data['image_embeddings'] = torch.stack(data['image_embeddings'])
+        data['text_embeddings'] = torch.stack(data['text_embeddings'])
+        return data
 
 
 class COCODataset(Dataset):
@@ -227,9 +245,8 @@ class COCODataset(Dataset):
         if shuffle:
             np.random.shuffle(indices)
         sampler = torch.utils.data.SequentialSampler(indices)
-        loader = torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False,
-                                             collate_fn=self.collate_fn)
-        return loader, indices
+        return torch.utils.data.DataLoader(self, batch_size=batch_size, sampler=sampler, shuffle=False,
+                                           collate_fn=self.collate_fn)
 
     def get_image_means(self):
         embeds = torch.stack(self.image_embeddings)
@@ -274,6 +291,9 @@ if __name__ == '__main__':
     loader = dataset.get_loader(batch_size=4)
     print(f'batches: {len(loader)}')
     for epoch in range(3):
-        for batch in tqdm(loader):
+        for i, batch in tqdm(enumerate(loader), total=len(loader)):
+            if i == 0 and epoch == 0:
+                print('image embeddings', batch['image_embeddings'].shape)
+                print('text embeddings', batch['text_embeddings'].shape)
             pass
 

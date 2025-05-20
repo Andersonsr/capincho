@@ -23,6 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, default=32, help='alpha for Low Rank Adaptation')
     parser.add_argument('--accumulate_grad_steps', type=int, default=1, help='number of steps to accumulate grad')
     parser.add_argument('--batch_size', type=int, default=4, help='batch size per device')
+    parser.add_argument('--val_steps', type=int, default=50000, help='number of steps to validate')
     args = parser.parse_args()
 
     last_step = 0
@@ -61,7 +62,7 @@ if __name__ == '__main__':
         )
         trainArgs = SFTConfig(
             fp16=args.fp16,
-            logging_steps=5000,
+            logging_steps=args.val_steps,
             logging_strategy='steps',
             evaluation_strategy='steps',
             learning_rate=args.lr,

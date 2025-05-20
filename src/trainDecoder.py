@@ -3,7 +3,7 @@ import pickle
 import random
 import logging
 import torch
-from dataLoaders import COCODataset, PetroDataset
+from dataLoaders import COCODataset, PetroDataset, MIMICLoader
 from tqdm import tqdm
 from torch.optim import AdamW
 import matplotlib.pyplot as plt
@@ -85,14 +85,18 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
         val_data = TextLoader(filename, split='val')
         assert text_only, 'petro-txt only supports text only training'
 
+    elif dataset == 'mimic':
+        train_data = MIMICLoader(filename)
+        val_data = MIMICLoader(filename.replace('train', 'dev'))
+
     else:
         raise ValueError(f'{dataset} is not a valid dataset')
 
     logging.debug('training dataset size: %d' % len(train_data))
     logging.debug('validation dataset size: %d' % len(val_data))
 
-    train_loader, indices = train_data.get_loader(batch_size=batch_size)
-    val_loader, indices = val_data.get_loader(batch_size=batch_size)
+    train_loader = train_data.get_loader(batch_size=batch_size)
+    val_loader = val_data.get_loader(batch_size=batch_size)
 
     # model
     decoder = Decoder(model_name, device,

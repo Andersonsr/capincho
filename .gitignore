@@ -20,7 +20,6 @@ descricoes.xlsx
 *.xlsx
 capivara
 *.pkl
-src/evaluateCaptioning.py
 logs
 config.yaml
 textDatasets

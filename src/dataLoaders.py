@@ -101,7 +101,7 @@ class MIMICLoader(Dataset):
 
     def load_chunk(self, index):
         assert 0 <= index <= len(self.chunks), 'index out of range'
-        logging.info('loading chunk {}'.format(index))
+        logging.debug('loading chunk {}'.format(index))
         with open(self.chunks[index], 'rb') as f:
             if index == 0:
                 # reset chunks

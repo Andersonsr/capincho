@@ -1,3 +1,6 @@
+import gc
+import math
+
 from tqdm import tqdm
 from PIL import Image
 import glob
@@ -144,6 +147,69 @@ def mimic_stats(filename, dataset_root):
             break
 
 
+def mimic_labels(filename, output_dir):
+    valid_labels = ['Atelectasis',
+                    'Cardiomegaly',
+                    'Consolidation',
+                    'Edema',
+                    'Enlarged Cardiomediastinum',
+                    'Fracture',
+                    'Lung Lesion',
+                    'Lung Opacity',
+                    'Pleural Effusion',
+                    'Pleural Other',
+                    'Pneumonia',
+                    'Pneumothorax']
+    to_keep = []
+    with open(filename, 'rb') as f:
+        data = pickle.load(f)
+        data['image_embeddings'] = list(torch.unbind(data['image_embeddings'], dim=0))
+        data['text_embeddings'] = list(torch.unbind(data['text_embeddings'], dim=0))
+
+        for i, e in enumerate(tqdm(data['labels'])):
+            if 'No Finding' in e and e['No Finding'] != 1:
+                # old labels: positive: 1, negative: 0, uncertain: -1, ignore: nan
+                # new labels: positive: 1, negative: 0, uncertain: 2, ignore: 3
+                new_labels = {}
+                for label in valid_labels:
+                    if math.isnan(e[label]):
+                        new_labels[label] = 3
+                    else:
+                        new_labels[label] = 2 if e[label] < 0 else e[label]
+                data['labels'][i] = new_labels
+                to_keep.append(i)
+
+    # initialize dict to store filtered data
+    filtered = {}
+    for k in data.keys():
+        filtered[k] = []
+
+    print('removing unlabeled samples')
+    for i in to_keep:
+        for k in data.keys():
+            filtered[k].append(data[k][i])
+
+    print('len by key', ['{}: {}'.format(k, len(filtered[k])) for k in filtered.keys()])
+    print('removed {} samples'.format(len(data['labels']) - len(to_keep)))
+
+    filtered['image_embeddings'] = torch.stack(filtered['image_embeddings'])
+    filtered['text_embeddings'] = torch.stack(filtered['text_embeddings'])
+
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, os.path.basename(filename))
+    print('saving result to {}'.format(output_path))
+    with open(output_path, 'wb') as f2:
+        pickle.dump(filtered, f2)
+
+
 if __name__ == '__main__':
-    mimic_stats('/')
+    splits = ['dev', 'test',]
+    for split in splits:
+        print('processing split: {}'.format(split))
+        chunks = glob.glob(f'D:\\mimic\\processado\\mimic_{split}_224\\embeddings\\*.pkl')
+
+        for i, chunk in enumerate(chunks):
+            print('Processing chunk {} of {}'.format(i, len(chunks)-1))
+            mimic_labels(chunk,
+                         f'D:\\mimic\\processado\\mimic_{split}_224\\filtered\\')
 

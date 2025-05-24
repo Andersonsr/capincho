@@ -40,3 +40,13 @@ class ResidualDynamicHead(nn.Module):
         x = self.model(embeddings)
         x = self.residual * x + (1 - self.residual) * embeddings
         return x
+
+
+class LinearClassificationHead(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(LinearClassificationHead, self).__init__()
+        self.linear = nn.Linear(in_dim, out_dim)
+
+    def forward(self, embeddings):
+        return self.linear(embeddings)
+

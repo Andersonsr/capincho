@@ -1,15 +1,65 @@
 import random
 import torch
 import torch.nn as nn
-from projectionHeads import ResidualLearnableHead, ResidualDynamicHead
+from projectionHeads import ResidualLearnableHead, LinearClassificationHead
 import numpy as np
-from embeddingsDataset import COCODataset
+from dataLoaders import COCODataset
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+class CapinchoAdapter(nn.Module):
+    def __init__(self, input_dim, initial_residual_ratio, classifiers_names, classifiers_outputs, logit_scale,
+                 contrastive=False):
+        super(CapinchoAdapter, self).__init__()
+        self.imageAdapter = ResidualLearnableHead(input_dim, initial_residual_ratio, False)
+        self.contrastive = contrastive
+        self.logit_scale = logit_scale
+        for classifier in classifiers_names:
+            self.classifiers[classifier] = LinearClassificationHead(input_dim, classifiers_outputs)
+
+    def forward(self, batch, average):
+        image_embeddings = batch['image_embeddings'].to(self.device, torch.float32).squeeze()
+
+        # resized features logits
+        image_embeddings = self.imageAdapter.forward(image_embeddings)
+        accumulated_loss = 0
+        CE = nn.CrossEntropyLoss()
+        for classifier, labels in batch['labels']:
+            logits = self.classifiers[classifier](image_embeddings)
+            loss = CE(logits, labels, ignore_index=3)
+            accumulated_loss += loss
+
+        if average:
+            accumulated_loss = accumulated_loss / len(batch['labels'])
+
+        if self.contrastive:
+            text_embeddings = batch['text_embeddings'].to(self.device, torch.float32).squeeze()
+
+            # some datasets have more than one description per image, pick one random description
+            c = random.randint(0, text_embeddings.shape[1] - 1)
+            text_embeddings = text_embeddings[:, c, :]
+            # normalization
+            text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
+            image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
+            # loss computation
+            logits = (image_embeddings @ text_embeddings.T) * (self.logit_scale.exp())
+            targets = torch.arange(len(batch['image_embeddings'])).to(device)
+            i_loss = CE(logits, targets)
+            t_loss = CE(logits.T, targets)
+            contrastive_loss = i_loss + t_loss
+            # compounded loss
+            accumulated_loss = accumulated_loss + contrastive_loss/2
+
+        return accumulated_loss
+
+    def image_projection(self, embeddings):
+        self.eval()
+        return self.imageAdapter(embeddings.to(device, torch.float32))
 
 
 class ContrastiveResidualAdapter(nn.Module):
     def __init__(self, in_dim, initial_residual_ratio, initial_logit_scale, trainable_residual_ratio=True,
-                 frozen_text=False):
+                 frozen_text=False, ):
         super(ContrastiveResidualAdapter, self).__init__()
         self.imageAdapter = ResidualLearnableHead(in_dim, initial_residual_ratio, trainable_residual_ratio)
         if not frozen_text:
@@ -21,6 +71,8 @@ class ContrastiveResidualAdapter(nn.Module):
     def forward(self, batch):
         image_features = batch['image_embeddings'].to(device, torch.float32).squeeze()
         text_features = batch['text_embeddings'].to(device, torch.float32)
+
+        # some datasets have more than one description per image, pick one random description
         c = random.randint(0, text_features.shape[1]-1)
         text_features = text_features[:, c, :]
 
@@ -42,7 +94,8 @@ class ContrastiveResidualAdapter(nn.Module):
         return self.textAdapter(embeddings.to(device, torch.float32))
 
     def train_epoch(self, train_loader, optim):
-        self.train()
+        (self
+         .train())
         epoch_losses = []
         for batch in train_loader:
             optim.zero_grad()
@@ -53,6 +106,7 @@ class ContrastiveResidualAdapter(nn.Module):
             loss = i_loss + t_loss
             loss.backward()
             optim.step()
+
             if not self.frozen_text:
                 self.textAdapter.residual = nn.Parameter(torch.clamp(self.textAdapter.residual, min=0, max=1))
 
@@ -65,7 +119,9 @@ class ContrastiveResidualAdapter(nn.Module):
         epoch_losses = []
 
         for batch in val_loader:
-            logits = self.forward(batch)
+            with torch.no_grad():
+                logits = self.forward(batch)
+
             targets = torch.arange(len(batch['image_embeddings'])).to(device)
             i_loss = nn.CrossEntropyLoss()(logits, targets)
             t_loss = nn.CrossEntropyLoss()(logits.T, targets)

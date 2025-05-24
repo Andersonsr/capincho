@@ -8,8 +8,8 @@ from src.adapters import ContrastiveResidualAdapter, SigAdapter
 from tqdm import tqdm
 from torch.optim import Adam
 from src import foundation_models
-from embeddingsDataset import COCODataset
-from earlyStopping import EarlyStopping
+from dataLoaders import COCODataset
+
 from util import plot_curves
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -23,7 +23,6 @@ def run_training(save_path, batch_size, dataset, model, epochs, lr, patience, de
     if patience < 0:
         patience = epochs
 
-    es = EarlyStopping(patience=patience, minimal_improvement=delta, objective='minimize', save_option=save_option)
     training_losses = []
     validation_losses = []
 
@@ -44,11 +43,8 @@ def run_training(save_path, batch_size, dataset, model, epochs, lr, patience, de
                       'optimizer_state_dict': optim.state_dict(),
                       'loss': training_losses[-1]
                       }
-        es.update(validation_loss, model_dict)
-        if es.stop:
-            break
+        torch.save(model_dict, os.path.join(save_path, 'checkpoint.pt'))
 
-    torch.save(es.model_to_save(), os.path.join(save_path, 'checkpoint.pt'))
     plot_curves(training_losses, validation_losses, os.path.join(save_path, 'loss_plot.png'))
     log = {'training_loss': training_losses, 'validation_loss': validation_losses}
     with open(os.path.join(save_path, 'loss_log.pkl'), 'wb') as f:

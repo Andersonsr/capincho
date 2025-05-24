@@ -138,11 +138,12 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
     # training loop
     for epoch in range(epochs):
+
         log_loss = []
 
         i = 0
         # print(f'batches {len(train_loader)}')
-        for batch in tqdm(train_loader, total=len(train_loader)):
+        for batch in tqdm(train_loader, total=len(train_loader), desc='Epoch {}'.format(epoch)):
             i += 1
             optim.zero_grad()
             batch = prepare_batch(batch, text_only, patch, device, num_descriptions=num_captions, break_line=break_line)

@@ -13,33 +13,6 @@ import os
 import numpy as np
 
 
-def pkl_to_xlsx(pkl_file: str, xlsx_file: str):
-    with open(pkl_file, 'rb') as f:
-        data = pickle.load(f)
-    data_dict = {}
-    for i in range(len(data[0])):
-        data_dict[f'max_len {50 + i * 50}'] = []
-
-    for i in range(len(data)):
-        for j in range(len(data[i])):
-            data_dict[f'max_len {50 + j * 50}'].append(data[i][j])
-
-    df = pd.DataFrame(data_dict)
-    df.to_excel(xlsx_file, index=False)
-
-
-def concatenate_pkls(pkl_files: list, output_file: str):
-    data_dict = {'image_features': [], 'labels': []}
-    for pkl_file in pkl_files:
-        with open(pkl_file, 'rb') as f:
-            data = pickle.load(f)
-            data_dict['image_features'] += data['image_features']
-            data_dict['labels'] += data['label']
-
-    with open(output_file, 'wb') as f:
-        pickle.dump(data_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-
 def rename_column(pkl_file: str):
     data_dict = {'image_features': [], 'labels': []}
     with open(pkl_file, 'rb') as f:
@@ -84,12 +57,6 @@ def concat_images():
     lower = np.concatenate((imgs[2], imgs[3], imgs[4]), axis=1)
     final = np.concatenate((upper, lower), axis=0)
     cv.imwrite('final vit.png', final)
-
-
-def count_mimic():
-    files = glob.glob('/mnt/d/datasets/mimic-cxr-jpg/2.1.0/files/p10/*')
-
-    print(len(files))
 
 
 def generate_dummy_texts(n=36):
@@ -148,18 +115,7 @@ def mimic_stats(filename, dataset_root):
 
 
 def mimic_labels(filename, output_dir):
-    valid_labels = ['Atelectasis',
-                    'Cardiomegaly',
-                    'Consolidation',
-                    'Edema',
-                    'Enlarged Cardiomediastinum',
-                    'Fracture',
-                    'Lung Lesion',
-                    'Lung Opacity',
-                    'Pleural Effusion',
-                    'Pleural Other',
-                    'Pneumonia',
-                    'Pneumothorax']
+    from util import VALID_LABELS
     to_keep = []
     with open(filename, 'rb') as f:
         data = pickle.load(f)
@@ -171,7 +127,7 @@ def mimic_labels(filename, output_dir):
                 # old labels: positive: 1, negative: 0, uncertain: -1, ignore: nan
                 # new labels: positive: 1, negative: 0, uncertain: 2, ignore: 3
                 new_labels = {}
-                for label in valid_labels:
+                for label in VALID_LABELS:
                     if math.isnan(e[label]):
                         new_labels[label] = 3
                     else:
@@ -202,14 +158,21 @@ def mimic_labels(filename, output_dir):
         pickle.dump(filtered, f2)
 
 
+
+
 if __name__ == '__main__':
-    splits = ['dev', 'test',]
-    for split in splits:
-        print('processing split: {}'.format(split))
-        chunks = glob.glob(f'D:\\mimic\\processado\\mimic_{split}_224\\embeddings\\*.pkl')
+    # run mimic labels to reorganize labels
+    # splits = ['dev', 'test',]
+    # for split in splits:
+    #     print('processing split: {}'.format(split))
+    #     chunks = glob.glob(f'D:\\mimic\\processado\\mimic_{split}_224\\embeddings\\*.pkl')
+    #
+    #     for i, chunk in enumerate(chunks):
+    #         print('Processing chunk {} of {}'.format(i, len(chunks)-1))
+    #         mimic_labels(chunk,
+    #                      f'D:\\mimic\\processado\\mimic_{split}_224\\filtered\\')
 
-        for i, chunk in enumerate(chunks):
-            print('Processing chunk {} of {}'.format(i, len(chunks)-1))
-            mimic_labels(chunk,
-                         f'D:\\mimic\\processado\\mimic_{split}_224\\filtered\\')
-
+    with open('D:\modelos\\adapters\\mimic-frozentext-openclip-class\\loss_log.pkl', 'rb') as f:
+        data = pickle.load(f)
+        print('TRAINING ', data['training_loss'])
+        print('VALIDATION ', data['validation_loss'])

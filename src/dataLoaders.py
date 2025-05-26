@@ -167,6 +167,20 @@ class MIMICLoader(Dataset):
             for key in e.keys():
                 data[key].append(e[key])
 
+        new_labels = {}
+        # organize labels
+        for label in data['labels']:
+            for key in label:
+                if key not in new_labels.keys():
+                    new_labels[key] = []
+
+                new_labels[key].append(label[key])
+
+        # list to tensor
+        for key in new_labels.keys():
+            new_labels[key] = torch.tensor(new_labels[key]).to(dtype=torch.long)
+
+        data['labels'] = new_labels
         data['image_embeddings'] = torch.stack(data['image_embeddings'])
         data['text_embeddings'] = torch.stack(data['text_embeddings'])
         return data
@@ -295,5 +309,6 @@ if __name__ == '__main__':
             if i == 0 and epoch == 0:
                 print('image embeddings', batch['image_embeddings'].shape)
                 print('text embeddings', batch['text_embeddings'].shape)
+                print(batch['labels'])
             pass
 

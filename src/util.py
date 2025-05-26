@@ -1,4 +1,18 @@
 
+VALID_LABELS = ['Atelectasis',
+                'Cardiomegaly',
+                'Consolidation',
+                'Edema',
+                'Enlarged Cardiomediastinum',
+                'Fracture',
+                'Lung Lesion',
+                'Lung Opacity',
+                'Pleural Effusion',
+                'Pleural Other',
+                'Pneumonia',
+                'Pneumothorax']
+
+
 def plot_curves(training, validation, output_name):
     import matplotlib.pyplot as plt
     plt.plot(training, label=f'training loss')

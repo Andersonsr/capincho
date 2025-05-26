@@ -1,108 +1,152 @@
 import argparse
 import json
 import os.path
-import pickle
+import logging
 import time
+from util import VALID_LABELS
 import torch
-from src.adapters import ContrastiveResidualAdapter, SigAdapter
+from adapters import ContrastiveResidualAdapter, ClassificationAdapter
 from tqdm import tqdm
 from torch.optim import Adam
-from src import foundation_models
-from dataLoaders import COCODataset
-
+from foundation_models import model_dict
+from dataLoaders import COCODataset, MIMICLoader
 from util import plot_curves
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-def run_training(save_path, batch_size, dataset, model, epochs, lr, patience, delta, restore_best=False):
-    train_dataset = COCODataset(dataset)
-    val_dataset = COCODataset(dataset.replace('train', 'val'))
-    train_loader, train_indices = train_dataset.get_loader(shuffle=False, batch_size=batch_size)
-    val_loader, val_indices = val_dataset.get_loader(shuffle=False, batch_size=batch_size)
-    save_option = "best" if restore_best else "last"
-    if patience < 0:
-        patience = epochs
+def run_training(save_path, train_loader, val_loader, model, epochs, lr,):
+    training_loss = []
+    validation_loss = []
 
-    training_losses = []
-    validation_losses = []
+    # loss per classifier
+    if type(model) is ClassificationAdapter:
+        classifier_loss = {}
+        for classifier in model.classifiers.keys():
+            classifier_loss[classifier] = []
 
     optim = Adam(model.parameters(), lr=lr)
-
     print(f'training {os.path.basename(save_path)}')
     time.sleep(1)
 
-    for i in tqdm(range(epochs)):
-        training_loss = model.train_epoch(train_loader, optim)
-        validation_loss = model.val_epoch(val_loader)
+    for i in tqdm(range(epochs), desc='training adapter'):
+        epoch_training_loss = []
+        epoch_validation_loss = []
+        # epoch loss per classifier
+        if type(model) is ClassificationAdapter:
+            epoch_classifier_loss = {}
+            for classifier in model.classifiers.keys():
+                epoch_classifier_loss[classifier] = []
 
-        training_losses.append(training_loss)
-        validation_losses.append(validation_loss)
+        for batch in train_loader:
+            model.train()
+            optim.zero_grad()
+            loss_obj = model.forward(batch)
+            loss = loss_obj['loss']
+            loss.backward()
+            optim.step()
+            epoch_training_loss.append(loss.tolist())
+            logging.debug('training loss: {}'.format(loss))
 
+            # batch loss per classifier
+            if type(model) is ClassificationAdapter:
+                for classifier in model.classifiers.keys():
+                    epoch_classifier_loss[classifier].append(loss_obj[classifier].tolist())
+
+        # validation
+        for batch in val_loader:
+            model.eval()
+            with torch.no_grad():
+                loss_obj = model.forward(batch)
+                loss = loss_obj['loss']
+                epoch_validation_loss.append(loss.tolist())
+
+        # logging
+        training_loss.append(sum(epoch_training_loss)/len(epoch_training_loss))
+        validation_loss.append(sum(epoch_validation_loss)/len(epoch_validation_loss))
+        logging.debug('epoch training loss: {}'.format(training_loss[-1]))
+        logging.debug('epoch validation loss: {}'.format(validation_loss[-1]))
+        log = {'training_loss': training_loss, 'validation_loss': validation_loss}
+
+        # classification loss logging
+        if type(model) is ClassificationAdapter:
+            for classifier in model.classifiers.keys():
+                classifier_loss[classifier].append(sum(epoch_classifier_loss[classifier])/len(epoch_classifier_loss[classifier]))
+                log[classifier+'_loss'] = classifier_loss[classifier]
+
+        with open(os.path.join(save_path, 'loss_log.json'), 'w') as f:
+            json.dump(log, f, indent=4)
+
+        # plot graph with training and validation loss
+        plot_curves(training_loss, validation_loss, os.path.join(save_path, 'loss_plot.png'))
+
+        # model checkpointing
         model_dict = {'epoch': i,
                       'model_state_dict': model.state_dict(),
                       'optimizer_state_dict': optim.state_dict(),
-                      'loss': training_losses[-1]
-                      }
+                      'loss': training_loss[-1]}
         torch.save(model_dict, os.path.join(save_path, 'checkpoint.pt'))
-
-    plot_curves(training_losses, validation_losses, os.path.join(save_path, 'loss_plot.png'))
-    log = {'training_loss': training_losses, 'validation_loss': validation_losses}
-    with open(os.path.join(save_path, 'loss_log.pkl'), 'wb') as f:
-        pickle.dump(log, f)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='openclip', choices=['openclip', 'clip', 'coca'],
+    parser.add_argument('--model', type=str, default='openclip', choices=model_dict.keys(),
                         help='foundation model')
-    parser.add_argument('--adapter', type=str, default='contrastive', choices=['contrastive', 'sig'],
-                        help='adapter type')
+    parser.add_argument('--adapter', type=str, default='contrastive', help='adapter type',
+                        choices=['contrastive', 'classification'],)
     parser.add_argument('--alpha', type=float, default=0.3, help='residual learning rate')
-    parser.add_argument('--bias', type=float, default=-10., help='logit bias, sig adapter')
     parser.add_argument('--embeddings', type=str, required=True,
                         help='training embeddings path')
-    parser.add_argument('--use_bias', action='store_true', help='use logit bias in sig adapter', default=False)
-    parser.add_argument('--multiple_positives', action='store_true',
-                        help='use multiple positives per batch in sig adapter', default=False)
+    parser.add_argument('--dataset', type=str, required=True,
+                        choices=['coco', 'petro', 'petro-txt', 'mimic'])
     parser.add_argument('--batch_size', type=int, default=400, help='batch size')
     parser.add_argument('--input_dim', type=int, default=768, help='embedding input dimension')
     parser.add_argument('--learnable_alpha', action='store_true', help='learnable alpha', default=False)
     parser.add_argument('--save_path', type=str, required=True, help='path to save outputs')
-    parser.add_argument('--patience', type=int, default=-1, help='early stopping patience, '
-                                                                 'negative value means no early stopping')
     parser.add_argument('--lr', type=float, default=0.00001, help='learning rate')
-    parser.add_argument('--best', action='store_true', help='restore best model if using early stopping', default=False)
-    parser.add_argument('--delta', type=float, help='minimal improvement for early stopping', default=0.01,)
     parser.add_argument('--epochs', type=int, default=200, help='number training of epochs')
     parser.add_argument('--frozen_text', action='store_true', help='use frozen text encoder', default=False)
+    parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     args = parser.parse_args()
 
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
         print('created directory', args.save_path)
 
-    model_dict = {'coca': foundation_models.OpenCoCa,
-                  'clip': foundation_models.CLIP,
-                  'openclip': foundation_models.OpenCLIP}
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     foundation = model_dict[args.model](device)
     foundation.load_model()
 
     logit_scale = foundation.backbone.logit_scale
-
-    if args.adapter == 'sig':
-        model = SigAdapter(args.input_dim, args.alpha, args.bias, logit_scale, use_logit_bias=args.use_bias,
-                           multi_positive=args.multiple_positives,)
-
-    elif args.adapter == 'contrastive':
-        model = ContrastiveResidualAdapter(args.input_dim, args.alpha, logit_scale, args.learnable_alpha,
+    # CREATE ADAPTER
+    if args.adapter == 'contrastive':
+        model = ContrastiveResidualAdapter(args.input_dim, args.alpha, logit_scale, device, args.learnable_alpha,
                                            frozen_text=args.frozen_text)
+    elif args.adapter == 'classification':
+        model = ClassificationAdapter(args.input_dim, args.alpha, VALID_LABELS, 3, logit_scale, device)
+
     else:
-        raise ValueError('supported adapter types are sig, contrastive')
+        raise ValueError('adapter not supported')
+
+    # LOAD DATASET
+    if args.dataset == 'coco':
+        train_dataset = COCODataset(args.embeddings)
+        val_dataset = COCODataset(args.embeddings.replace('train', 'val'))
+
+    elif args.dataset == 'mimic':
+        train_dataset = MIMICLoader(args.embeddings)
+        val_dataset = MIMICLoader(args.embeddings.replace('train', 'dev'))
+
+    else:
+        raise ValueError('dataset not supported')
+
+    train_loader = train_dataset.get_loader(batch_size=args.batch_size)
+    val_loader = val_dataset.get_loader(batch_size=args.batch_size)
 
     model.to(device)
-    run_training(args.save_path, args.batch_size, args.embeddings, model, args.epochs, args.lr, args.patience,
-                 args.delta, args.best)
+    # save_path, train_loader, val_loader, model, epochs, lr,
+    run_training(args.save_path, train_loader, val_loader, model, args.epochs, args.lr,)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

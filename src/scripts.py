@@ -171,8 +171,15 @@ if __name__ == '__main__':
     #         print('Processing chunk {} of {}'.format(i, len(chunks)-1))
     #         mimic_labels(chunk,
     #                      f'D:\\mimic\\processado\\mimic_{split}_224\\filtered\\')
+    import subprocess
+    experiment = 'D:\\modelos\\adapters\\mimic-frozentext-openclip-class\\experiment.json'
+    for chunk in glob.glob('D:\\mimic\\processado\\mimic_train_224\\embeddings\\*.pkl'):
+        output = chunk.replace('embeddings', 'embeddings_adapter_class_06')
+        print(output)
+        command_list = ['python', 'featuresAdaptation.py', '--experiment', experiment, '--adapter', 'classification',
+                        '--dataset', 'mimic', '--output', output, '--embeddings', chunk]
+        try:
+            result = subprocess.run(command_list)
 
-    with open('D:\modelos\\adapters\\mimic-frozentext-openclip-class\\loss_log.pkl', 'rb') as f:
-        data = pickle.load(f)
-        print('TRAINING ', data['training_loss'])
-        print('VALIDATION ', data['validation_loss'])
+        except subprocess.CalledProcessError as e:
+            print(e.stderr)

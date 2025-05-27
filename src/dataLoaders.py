@@ -75,9 +75,12 @@ class PetroDataset(Dataset):
 
 
 class MIMICLoader(Dataset):
-    def __init__(self, dirname, chunks=None):
+    def __init__(self, dirname, chunks=None, unchanged_labels=False):
         assert os.path.exists(dirname), '{} does not exist'.format(dirname)
-        self.chunks = glob.glob(os.path.join(dirname, '*.pkl'))
+        if os.path.isdir(dirname):
+            self.chunks = glob.glob(os.path.join(dirname, '*.pkl'))
+        else:
+            self.chunks = [dirname]
 
         assert len(self.chunks) > 0, 'No .pkl files found in {}'.format(dirname)
         self.chunks.sort(key=lambda x: int(os.path.basename(x).split('_')[1]))
@@ -85,6 +88,7 @@ class MIMICLoader(Dataset):
             assert chunks < len(self.chunks), '{} exceeds number of chunks'.format(chunks)
             self.chunks = self.chunks[:chunks]
 
+        self.unchanged_labels = unchanged_labels
         self.len = sum([len(pickle.load(open(d, 'rb'))['image_id']) for d in self.chunks])
         self.data = {}
         self.current_chunk = 0
@@ -168,19 +172,21 @@ class MIMICLoader(Dataset):
                 data[key].append(e[key])
 
         new_labels = {}
-        # organize labels
-        for label in data['labels']:
-            for key in label:
-                if key not in new_labels.keys():
-                    new_labels[key] = []
+        if not self.unchanged_labels:
+            # organize labels for classification training
+            for label in data['labels']:
+                for key in label:
+                    if key not in new_labels.keys():
+                        new_labels[key] = []
 
-                new_labels[key].append(label[key])
+                    new_labels[key].append(label[key])
 
-        # list to tensor
-        for key in new_labels.keys():
-            new_labels[key] = torch.tensor(new_labels[key]).to(dtype=torch.long)
+            # list to tensor
+            for key in new_labels.keys():
+                new_labels[key] = torch.tensor(new_labels[key]).to(dtype=torch.long)
 
-        data['labels'] = new_labels
+            data['labels'] = new_labels
+
         data['image_embeddings'] = torch.stack(data['image_embeddings'])
         data['text_embeddings'] = torch.stack(data['text_embeddings'])
         return data

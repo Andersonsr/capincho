@@ -1,5 +1,7 @@
 import argparse
+import json
 import logging
+import os.path
 import random
 import torch
 from dataLoaders import PetroDataset, COCODataset
@@ -54,8 +56,6 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
 
     generated = []
-    gt = []
-    ids = []
     for i in tqdm([random.randint(0, len(data)) for i in range(args.num_images)]):
         # print(data[i]['image_embeddings'].shape)
         if args.dataset == 'petro' or args.dataset == 'coco' or args.dataset == 'cego':
@@ -79,23 +79,16 @@ if __name__ == '__main__':
                                do_sample=args.do_sample,
                                penalty_alpha=args.penalty_alpha,
                                diversity_penalty=args.diversity_penalty)
-        generated.append(output[0])
 
+        sample = {'original': data[i]['captions'], 'generated': output[0]}
         if 'image_id' in data[i].keys():
-            ids.append(data[i]['image_id'])
+            sample['image_id'] = data[i]['image_id']
+        generated.append(sample)
 
-        gt.append(data[i]['captions'])
-        # print(data[i]['captions'])
-
-    for i in range(len(gt)):
-        if 'image_id' in data[i].keys():
-            print('id: ', ids[i])
-        if type(gt[i]) is list:
-            print('ORIGINAL: ', gt[i][0])
-        else:
-            print('ORIGINAL: ' + gt[i])
-
-        print('GENERATED: ', generated[i])
-        print()
+        out_path = os.path.join(os.path.dirname(args.model), 'generated_captions.json')
+        with open(out_path, 'w') as file:
+            result = args.__dict__
+            result['generated'] = generated
+            json.dump(result, file, indent=2)
 
 

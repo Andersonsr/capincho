@@ -5,8 +5,6 @@ import torch.nn as nn
 from projectionHeads import ResidualLearnableHead, LinearClassificationHead
 import numpy as np
 from dataLoaders import COCODataset
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 class ClassificationAdapter(nn.Module):
     def __init__(self, input_dim, initial_residual_ratio, classifiers_names, classifiers_outputs, logit_scale,
@@ -15,7 +13,7 @@ class ClassificationAdapter(nn.Module):
         self.device = device
         self.imageAdapter = ResidualLearnableHead(input_dim, initial_residual_ratio, False).to(self.device)
         self.contrastive = contrastive
-        self.logit_scale = logit_scale.to(self.device)
+        self.logit_scale = nn.Parameter(logit_scale).to(self.device)
         self.classifiers = {}
 
         for classifier in classifiers_names:
@@ -52,7 +50,7 @@ class ClassificationAdapter(nn.Module):
             image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
             # loss computation
             logits = (image_embeddings @ text_embeddings.T) * (self.logit_scale.exp())
-            targets = torch.arange(len(batch['image_embeddings'])).to(device)
+            targets = torch.arange(len(batch['image_embeddings'])).to(self.device)
             i_loss = CE(logits, targets)
             t_loss = CE(logits.T, targets)
             contrastive_loss = i_loss + t_loss
@@ -65,11 +63,11 @@ class ClassificationAdapter(nn.Module):
 
     def image_projection(self, embeddings):
         with torch.no_grad():
-            return self.imageAdapter(embeddings.to(device, torch.float32))
+            return self.imageAdapter(embeddings.to(self.device, torch.float32))
 
     def text_projection(self, embeddings):
         # this is here just for compatibility with other scripts
-        return embeddings
+        return embeddings.to(self.device, torch.float32)
 
 
 class ContrastiveResidualAdapter(nn.Module):
@@ -88,8 +86,8 @@ class ContrastiveResidualAdapter(nn.Module):
         self.frozen_text = frozen_text
 
     def forward(self, batch):
-        image_features = batch['image_embeddings'].to(device, torch.float32).squeeze().to(self.device)
-        text_features = batch['text_embeddings'].to(device, torch.float32).to(self.device)
+        image_features = batch['image_embeddings'].to(self.device, torch.float32).squeeze().to(self.device)
+        text_features = batch['text_embeddings'].to(self.device, torch.float32).to(self.device)
 
         # some datasets have more than one description per image, pick one random description
         c = random.randint(0, text_features.shape[1]-1)
@@ -105,28 +103,19 @@ class ContrastiveResidualAdapter(nn.Module):
 
         # loss computation
         logits = (image_features @ text_features.T) * self.logit_scale.exp()
-        targets = torch.arange(len(batch['image_embeddings'])).to(device)
+        targets = torch.arange(len(batch['image_embeddings'])).to(self.device)
         i_loss = nn.CrossEntropyLoss()(logits, targets)
         t_loss = nn.CrossEntropyLoss()(logits.T, targets)
         return {'loss': i_loss + t_loss}
 
     def image_projection(self, embeddings):
         self.eval()
-        return self.imageAdapter(embeddings.to(device, torch.float32))
+        return self.imageAdapter(embeddings.to(self.device, torch.float32))
 
     def text_projection(self, embeddings):
         self.eval()
-        return self.textAdapter(embeddings.to(device, torch.float32))
+        return self.textAdapter(embeddings.to(self.device, torch.float32))
 
 
-if __name__ == '__main__':
-    logit_scale = torch.ones([]) * 3
-    adapter = ContrastiveResidualAdapter(768, 0.3, logit_scale).to(device)
-    dataset = 'coco_openCLIP'
-    val_dataset = COCODataset(f'embeddings/foundation/openclip_coco_val.pkl')
-    val_loader = val_dataset.get_loader(shuffle=False, batch_size=20)
-    for batch in val_loader:
-        adapter.forward(batch)
-        break
 
 

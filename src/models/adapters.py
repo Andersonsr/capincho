@@ -2,9 +2,14 @@ import logging
 import random
 import torch
 import torch.nn as nn
-from projectionHeads import ResidualLearnableHead, LinearClassificationHead
+import os
+import sys
 import numpy as np
-from dataLoaders import COCODataset
+# path trick
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from projectionHeads import ResidualLearnableHead, LinearClassificationHead
+
+
 
 class ClassificationAdapter(nn.Module):
     def __init__(self, input_dim, initial_residual_ratio, classifiers_names, classifiers_outputs, logit_scale,

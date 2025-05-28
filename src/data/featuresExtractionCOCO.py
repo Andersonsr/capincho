@@ -2,10 +2,16 @@ import argparse
 import logging
 import torch
 import os
+import sys
 from pycocotools.coco import COCO
 from tqdm import tqdm
 import pickle
-from foundation_models import model_dict
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.foundation_models import model_dict
+
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

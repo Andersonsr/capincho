@@ -53,7 +53,7 @@ if __name__ == '__main__':
     data = TextLoader(args.path)
     loader, indices = data.get_loader(batch_size=4)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    from trainDecoder import prepare_batch
+    from src.train.trainDecoder import prepare_batch
 
     for batch in loader:
         print(batch['text_embeddings'].shape)

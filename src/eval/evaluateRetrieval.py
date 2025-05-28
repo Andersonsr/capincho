@@ -1,11 +1,15 @@
-import clip
-import numpy as np
 import torch
-from embeddingsDataset import COCODataset
-from tqdm import tqdm
-from adapters import ContrastiveResidualAdapter, SigAdapter, DynamicContrastiveResidualAdapter
 import matplotlib.pyplot as plt
+import sys
+import os
 import clip
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from data.dataLoaders import COCODataset
+from models.adapters import ContrastiveResidualAdapter
+
+
 try:
     import open_clip
 except ImportError:

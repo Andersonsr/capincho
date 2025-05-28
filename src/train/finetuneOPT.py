@@ -3,11 +3,14 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import LoraConfig
 from trl import SFTTrainer, SFTConfig
-from util import model_size, learnable_parameters
+import sys
 import os
 import json
 import glob
-
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from util import model_size, learnable_parameters
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

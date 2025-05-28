@@ -2,10 +2,15 @@ import argparse
 import json
 import logging
 import os
+import sys
 import pickle
 from tqdm import tqdm
 import torch
-from foundation_models import prepare_image
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.foundation_models import prepare_image
 
 
 if __name__ == '__main__':

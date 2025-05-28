@@ -2,9 +2,15 @@ from tqdm import tqdm
 import pickle
 import pandas as pd
 import torch
-from foundation_models import model_dict
 import logging
 import argparse
+import os
+import sys
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.foundation_models import model_dict
 
 
 if __name__ == '__main__':

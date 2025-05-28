@@ -2,15 +2,22 @@ import argparse
 import json
 import os.path
 import logging
+import sys
 import time
-from util import VALID_LABELS
 import torch
-from adapters import ContrastiveResidualAdapter, ClassificationAdapter
 from tqdm import tqdm
 from torch.optim import Adam
-from foundation_models import model_dict
-from dataLoaders import COCODataset, MIMICLoader
-from util import plot_curves
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.adapters import ContrastiveResidualAdapter, ClassificationAdapter
+from util import VALID_LABELS, plot_curves
+from models.foundation_models import model_dict
+from data.dataLoaders import COCODataset, MIMICLoader
+
+
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 

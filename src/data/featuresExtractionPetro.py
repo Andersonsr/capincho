@@ -1,13 +1,19 @@
 import argparse
 import os
+import sys
 import pickle
 from tqdm import tqdm
 import pandas as pd
-from foundation_models import model_dict
 import torch
 import logging
 from torch.utils.data import Dataset
 import numpy as np
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.foundation_models import model_dict
+
 
 
 class PetroXLSLoader(Dataset):

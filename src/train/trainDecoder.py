@@ -3,14 +3,18 @@ import pickle
 import random
 import logging
 import torch
-from dataLoaders import COCODataset, PetroDataset, MIMICLoader
 from tqdm import tqdm
 from torch.optim import AdamW
 import matplotlib.pyplot as plt
 import json
 import os
-from decoder import Decoder
-from textLoader import TextLoader
+import sys
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.decoder import Decoder
+from data.textLoader import TextLoader
+from data.dataLoaders import COCODataset, PetroDataset, MIMICLoader
 from util import learnable_parameters
 
 

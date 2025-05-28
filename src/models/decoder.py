@@ -1,10 +1,10 @@
 import argparse
 import torch
+import os
+import sys
 import logging
-from util import model_size, learnable_parameters
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
-from mapping import Mapper
 import math
 from transformers import T5Model, T5ForConditionalGeneration
 from transformers import T5Tokenizer
@@ -12,6 +12,13 @@ try:
     from peft import LoraConfig, get_peft_model
 except ImportError:
     print('lora not available')
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from util import model_size, learnable_parameters
+from models.mapping import Mapper
+
 
 logger = logging.getLogger('captioning')
 

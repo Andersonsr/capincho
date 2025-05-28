@@ -2,10 +2,15 @@ import argparse
 import json
 import logging
 import os
+import sys
 import pickle
 import torch
 from tqdm import tqdm
-from foundation_models import model_dict
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.foundation_models import model_dict
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

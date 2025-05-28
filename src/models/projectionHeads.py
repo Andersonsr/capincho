@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 class ResidualLearnableHead(nn.Module):
     def __init__(self, in_dim, initial_residual_ratio, trainable_residual_ratio, bottleneck_reduction_ratio=4):

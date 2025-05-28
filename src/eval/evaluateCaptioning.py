@@ -1,13 +1,18 @@
 import argparse
 import json
 import logging
-import os.path
+import os
+import sys
 import random
 import torch
-from dataLoaders import PetroDataset, COCODataset
-from decoder import model_from_json
 from tqdm import tqdm
-from textLoader import TextLoader
+
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.decoder import model_from_json
+from data.textLoader import TextLoader
+from data.dataLoaders import PetroDataset, COCODataset
 
 
 if __name__ == '__main__':

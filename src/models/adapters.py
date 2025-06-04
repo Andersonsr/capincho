@@ -10,7 +10,6 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from projectionHeads import ResidualLearnableHead, LinearClassificationHead
 
 
-
 class ClassificationAdapter(nn.Module):
     def __init__(self, input_dim, initial_residual_ratio, classifiers_names, classifiers_outputs, logit_scale,
                  device, contrastive=False):
@@ -20,6 +19,7 @@ class ClassificationAdapter(nn.Module):
         self.contrastive = contrastive
         self.logit_scale = nn.Parameter(logit_scale).to(self.device)
         self.classifiers = {}
+        self.classifiers_outputs = classifiers_outputs
 
         for classifier in classifiers_names:
             self.classifiers[classifier] = LinearClassificationHead(input_dim, classifiers_outputs).to(self.device)
@@ -31,7 +31,7 @@ class ClassificationAdapter(nn.Module):
         # resized features logits
         image_embeddings = self.imageAdapter.forward(image_embeddings)
         accumulated_loss = 0
-        CE = nn.CrossEntropyLoss(ignore_index=3)
+        CE = nn.CrossEntropyLoss(ignore_index=self.classifiers_outputs)
         for classifier in self.classifiers.keys():
             logits = self.classifiers[classifier](image_embeddings)
             loss = CE(logits, labels[classifier].to(self.device))
@@ -114,13 +114,44 @@ class ContrastiveResidualAdapter(nn.Module):
         return {'loss': i_loss + t_loss}
 
     def image_projection(self, embeddings):
-        self.eval()
-        return self.imageAdapter(embeddings.to(self.device, torch.float32))
+        with torch.no_grad():
+            return self.imageAdapter(embeddings.to(self.device, torch.float32))
 
     def text_projection(self, embeddings):
-        self.eval()
-        return self.textAdapter(embeddings.to(self.device, torch.float32))
+        if self.frozen_text:
+            return embeddings.to(self.device, torch.float32)
+        with torch.no_grad():
+            return self.textAdapter(embeddings.to(self.device, torch.float32))
 
 
+def adapter_from_json(json_file):
+    import json
+    from util import VALID_LABELS
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    with open(json_file, 'r') as f:
+        config = json.load(f)
 
+    logit_scale = config['logit_scale'] * torch.ones([])
+    if 'frozen_text' in config.keys():
+        frozen_text = config['frozen_text']
+    else:
+        frozen_text = False
+
+    # create model and load checkpoint
+    if config['adapter'] == 'contrastive':
+        model = ContrastiveResidualAdapter(config['input_dim'], config['alpha'], logit_scale,
+                                           device, config['learnable_alpha'], frozen_text=frozen_text)
+
+    elif config['adapter'] == 'classification':
+        classes = config['class_outputs'] if 'class_outputs' in config.keys() else 3
+        model = ClassificationAdapter(config['input_dim'], config['alpha'], VALID_LABELS, classes, logit_scale, device, False)
+
+    else:
+        raise ValueError('{} not implemented'.format(config['adapter']))
+
+    checkpoint = torch.load(config['checkpoint_path'], weights_only=False)
+    del checkpoint['model_state_dict']['logit_scale']
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.to(device)
+    return model
 

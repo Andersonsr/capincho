@@ -3,19 +3,18 @@ import json
 import os
 import sys
 import random
-from src.models.decoder import model_from_json
 import torch
 import argparse
 from PIL import Image, ImageFont, ImageDraw
 from tqdm import tqdm
-# TODO: pycocotools is broken
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
 # path trick
 path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
 sys.path.append(path)
 from util import split_sentence
-from embeddingsDataset import COCODataset
+from data.dataLoaders import COCODataset
+from models.decoder import model_from_json
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -16,8 +16,6 @@ from util import VALID_LABELS, plot_curves
 from models.foundation_models import model_dict
 from data.dataLoaders import COCODataset, MIMICLoader
 
-
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -113,6 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=200, help='number training of epochs')
     parser.add_argument('--frozen_text', action='store_true', help='use frozen text encoder', default=False)
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
+    parser.add_argument('--class_outputs', type=int, default=3, help='number of classes to predict')
     args = parser.parse_args()
 
     if not os.path.exists(args.save_path):
@@ -131,7 +130,7 @@ if __name__ == '__main__':
         model = ContrastiveResidualAdapter(args.input_dim, args.alpha, logit_scale, device, args.learnable_alpha,
                                            frozen_text=args.frozen_text)
     elif args.adapter == 'classification':
-        model = ClassificationAdapter(args.input_dim, args.alpha, VALID_LABELS, 3, logit_scale, device)
+        model = ClassificationAdapter(args.input_dim, args.alpha, VALID_LABELS, args.class_outputs, logit_scale, device)
 
     else:
         raise ValueError('adapter not supported')

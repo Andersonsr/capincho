@@ -2,7 +2,7 @@ import argparse
 import os
 from tqdm import tqdm
 import pickle
-import json
+from models.adapters import adapter_from_json
 import sys
 import torch
 
@@ -27,7 +27,8 @@ def adapt_features(model, dataloader, save_path):
         data['image_name'] += batch['image_name']
         data['image_id'] += batch['image_id']
         data['captions'] += batch['captions']
-        data['labels'] += batch['labels']
+        if 'labels' in batch.keys():
+            data['labels'] += batch['labels']
 
     data['image_embeddings'] = torch.cat(image_embeddings).detach().cpu()
     data['text_embeddings'] = torch.cat(text_embeddings).detach().cpu()
@@ -50,26 +51,6 @@ if __name__ == '__main__':
     assert os.path.exists(args.embeddings), 'embeddings file does not exist'
     assert not os.path.isdir(args.embeddings), 'embeddings is directory'
 
-    with open(args.experiment, 'r') as f:
-        config = json.load(f)
-
-    logit_scale = config['logit_scale'] * torch.ones([])
-    if 'frozen_text' in config.keys():
-        frozen_text = config['frozen_text']
-    else:
-        frozen_text = False
-
-    # create model and load checkpoint
-    if config['adapter'] == 'contrastive':
-        model = ContrastiveResidualAdapter(config['input_dim'], config['alpha'], logit_scale,
-                                           device, config['learnable_alpha'], frozen_text=frozen_text)
-
-    if config['adapter'] == 'classification':
-        model = ClassificationAdapter(config['input_dim'], config['alpha'], VALID_LABELS, 3, logit_scale, device, False)
-
-    else:
-        raise ValueError('{} not implemented'.format(config['adapter']))
-
     # data loader
     if args.dataset == 'mimic':
         dataset = MIMICLoader(args.embeddings, unchanged_labels=True)
@@ -80,13 +61,8 @@ if __name__ == '__main__':
     else:
         raise ValueError(f'{args.dataset} dataset not implemented')
 
-    data_loader = dataset.get_loader(args.batch_size)
-
-    checkpoint = torch.load(config['checkpoint_path'])
-    del checkpoint['model_state_dict']['logit_scale']
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model = adapter_from_json(args.experiment)
     model.eval()
-    model.to(device)
-
+    data_loader = dataset.get_loader(args.batch_size)
     adapt_features(model, data_loader, save_path=args.output)
 

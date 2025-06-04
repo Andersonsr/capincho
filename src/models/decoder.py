@@ -8,10 +8,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 import math
 from transformers import T5Model, T5ForConditionalGeneration
 from transformers import T5Tokenizer
-try:
-    from peft import LoraConfig, get_peft_model
-except ImportError:
-    print('lora not available')
+from peft import LoraConfig, get_peft_model
+
 
 # path trick
 path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
@@ -57,6 +55,7 @@ class Decoder(nn.Module):
             self.model.to(self.device)
             self.mapper.to(self.device)
 
+    # TODO: Enable captioning of batched input
     def caption(self, embeddings, do_sample=False, max_tokens=200, seed=32, num_beams=1, top_k=None, top_p=None,
                 temperature=1.0, penalty_alpha=None, diversity_penalty=None):
         set_seed(seed)

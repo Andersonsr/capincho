@@ -9,16 +9,35 @@ Some examples from coco dataset, after training for 2 epochs only while learning
 
 ![image 1](figs/captions_000000139684.jpg)
 
-![image 2](figs/captions_000000246308.jpg)
-
-![image 3](figs/captions_000000391722.jpg)
-
 ### Installation ###
+
+1. create python 3.12 env
+
 ````angular2html
-pip install git+https://github.com/openai/CLIP.git
+conda create -n capincho python=3.12
+````
+
+2. install cuda toolkit 11.8
+````angular2html
+conda install conda-forge::cudatoolkit
+````
+
+3. install pytorch compatible with cuda
+````angular2html
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+````
+
+4. install requirements
+````angular2html
 pip install -r requirements.txt
 ````
 
+5. install radgraph compatible with python 3.12, for mimic evaluation
+````angular2html
+conda install git
+pip install git+https://github.com/aehrc/radgraph.git
+````
 
 ### Usage ###
 check the following files:

@@ -1,6 +1,8 @@
 import gc
 import math
 
+import matplotlib.pyplot as plt
+import numpy
 from tqdm import tqdm
 from PIL import Image
 import glob
@@ -158,28 +160,54 @@ def mimic_labels(filename, output_dir):
         pickle.dump(filtered, f2)
 
 
-
-
-if __name__ == '__main__':
-    # run mimic labels to reorganize labels
-    # splits = ['dev', 'test',]
-    # for split in splits:
-    #     print('processing split: {}'.format(split))
-    #     chunks = glob.glob(f'D:\\mimic\\processado\\mimic_{split}_224\\embeddings\\*.pkl')
-    #
-    #     for i, chunk in enumerate(chunks):
-    #         print('Processing chunk {} of {}'.format(i, len(chunks)-1))
-    #         mimic_labels(chunk,
-    #                      f'D:\\mimic\\processado\\mimic_{split}_224\\filtered\\')
+def run_multiple_adaptations():
     import subprocess
-    experiment = 'D:\\modelos\\adapters\\mimic-frozentext-openclip-class\\experiment.json'
+    experiment = 'D:\\modelos\\adapters\\mimic-frozentext-openclip-4class\\experiment.json'
     for chunk in glob.glob('D:\\mimic\\processado\\mimic_train_224\\embeddings\\*.pkl'):
-        output = chunk.replace('embeddings', 'embeddings_adapter_class_06')
+        output = chunk.replace('embeddings', 'embeddings_adapter_4class_06')
         print(output)
-        command_list = ['python', 'featuresAdaptation.py', '--experiment', experiment, '--adapter', 'classification',
+        command_list = ['python', 'data_processing/featuresAdaptation.py', '--experiment', experiment, '--adapter',
+                        'classification',
                         '--dataset', 'mimic', '--output', output, '--embeddings', chunk]
         try:
             result = subprocess.run(command_list)
 
         except subprocess.CalledProcessError as e:
             print(e.stderr)
+
+
+def exceed_clip():
+    import clip
+
+    with open('D:\\modelos\\decoders\\mimic\\4class-06-1632\\results.json', 'r') as f:
+        data = json.load(f)
+        lens = []
+        exceed = 0
+        for sample in data['generated']:
+            tokens = clip.tokenize(sample['reference'], context_length=1000, truncate=True)
+            lens.append(torch.count_nonzero(tokens, dim=1).tolist()[0])
+            if torch.count_nonzero(tokens, dim=1)[0] > 77:
+                exceed += 1
+    arr = numpy.array(lens)
+
+    print('median: ', np.median(arr))
+    print('mean: ', np.mean(arr))
+    print('std: ', numpy.std(arr))
+    print('exceed: ', exceed / len(lens))
+
+
+def plot_means():
+    data = pickle.load(open('D:\\embeddings\\foundation\\coco\\openclip_val.pkl', 'rb'))
+    images = torch.cat(data['image_embeddings'])
+    means_f = torch.mean(images, dim=0)
+
+    data = pickle.load(open('D:\\embeddings\\adapted\\coco\\frozentext_openclip_a06_val.pkl', 'rb'))
+    images = data['image_embeddings'].squeeze(dim=1)
+    means_a = torch.mean(images, dim=0)
+
+    plt.plot(range(len(means_f)), means_f, label='foundation')
+    plt.plot(range(len(means_a)), means_a, label='adapted')
+    print(torch.mean(means_a), torch.mean(means_f))
+    plt.legend()
+    plt.show()
+

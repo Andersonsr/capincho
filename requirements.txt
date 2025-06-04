@@ -1,9 +1,10 @@
+# python 3.12
 openai-clip
+transformers==4.40.0
 huggingface-hub
 matplotlib
 open_clip_torch
-peft
-torch==2.6.0
+peft==0.10.0
 pillow
 tqdm
 setuptools
@@ -11,6 +12,15 @@ datasets
 openpyxl
 datasets
 numpy
-transformers
 pandas
 tokenizers
+pycocotools
+pycocoevalcap
+trl
+opencv-python
+evaluate
+sacrebleu
+statsmodels
+scikit-learn
+rouge-score
+

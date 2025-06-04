@@ -12,7 +12,7 @@ path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '.
 sys.path.append(path)
 from models.decoder import model_from_json
 from data.textLoader import TextLoader
-from data.dataLoaders import PetroDataset, COCODataset
+from data.dataLoaders import PetroDataset, COCODataset, MIMICLoader
 
 
 if __name__ == '__main__':
@@ -24,7 +24,8 @@ if __name__ == '__main__':
                         help='split to load for evaluation, if all embeddings are in the same file')
     parser.add_argument('--random_seed', type=int, default=777, help='random seed for qualitative evaluation')
     parser.add_argument('--num_images', '-n', type=int, default=10, help='number of images to evaluate')
-    parser.add_argument('--dataset', type=str, required=True, choices=['petro', 'petro-txt', 'coco', 'cego'])
+    parser.add_argument('--dataset', type=str, required=True,
+                        choices=['petro', 'petro-txt', 'coco', 'mimic'])
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode')
     parser.add_argument('--patched', action='store_true', default=False, help='use patched embeddings')
     # generation arguments
@@ -49,8 +50,8 @@ if __name__ == '__main__':
         data = TextLoader(args.embeddings, split=args.split,)
     elif args.dataset == 'coco':
         data = COCODataset(args.embeddings, n_captions=1)
-    elif args.dataset == 'cego':
-        data = PetroDataset(args.embeddings, split=None)
+    elif args.dataset == 'mimic':
+        data = MIMICLoader(args.embeddings)
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
 
@@ -63,16 +64,13 @@ if __name__ == '__main__':
     generated = []
     for i in tqdm([random.randint(0, len(data)) for i in range(args.num_images)]):
         # print(data[i]['image_embeddings'].shape)
-        if args.dataset == 'petro' or args.dataset == 'coco' or args.dataset == 'cego':
+        if args.dataset == 'petro-txt':
+            embedding = data[i]['text_embeddings']
+        else:
             if args.patched:
                 embedding = data[i]['patch_embeddings']
             else:
                 embedding = data[i]['image_embeddings']
-
-        elif args.dataset == 'petro-txt':
-            embedding = data[i]['text_embeddings']
-        else:
-            raise ValueError(f'{args.dataset} is not a valid dataset')
 
         logging.debug(f'loaded embedding shape: {embedding.shape}')
         output = model.caption(embedding,
@@ -85,7 +83,7 @@ if __name__ == '__main__':
                                penalty_alpha=args.penalty_alpha,
                                diversity_penalty=args.diversity_penalty)
 
-        sample = {'original': data[i]['captions'], 'generated': output[0]}
+        sample = {'reference': data[i]['captions'], 'prediction': output[0]}
         if 'image_id' in data[i].keys():
             sample['image_id'] = data[i]['image_id']
         generated.append(sample)

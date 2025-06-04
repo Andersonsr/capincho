@@ -31,4 +31,8 @@ CLIP-LoRA
 Llip
 hardcodedEval.py
 mimic-code
-src/__pycache__/
+src/models/__pycache__/*
+src/eval/rrg_eval/__pycache__/*
+src/eval/__pycache__/*
+src/data/__pycache__/*
+src/__pycache__/*

@@ -89,7 +89,7 @@ class MIMICLoader(Dataset):
             self.chunks = self.chunks[:chunks]
 
         self.unchanged_labels = unchanged_labels
-        self.len = sum([len(pickle.load(open(d, 'rb'))['image_id']) for d in self.chunks])
+        self.len = sum([len(pickle.load(open(d, 'rb'))['image_name']) for d in self.chunks])
         self.data = {}
         self.current_chunk = 0
         self.offset = 0
@@ -113,16 +113,16 @@ class MIMICLoader(Dataset):
                 self.offset = 0
                 self.free_data()
                 self.data = pickle.load(f)
-                self.limit = len(self.data['image_id'])
+                self.limit = len(self.data['image_name'])
 
             else:
                 assert index == self.current_chunk + 1, 'chunks must be loaded in order'
                 # loading next chunk
                 self.current_chunk = index
-                self.offset += len(self.data['image_id'])
+                self.offset += len(self.data['image_name'])
                 self.free_data()
                 self.data = pickle.load(f)
-                self.limit += len(self.data['image_id'])
+                self.limit += len(self.data['image_name'])
 
         logging.debug(f'limit {self.limit}, offset {self.offset}, current chunk {self.current_chunk}')
 
@@ -143,12 +143,11 @@ class MIMICLoader(Dataset):
                 # load next chunk
                 self.load_chunk(self.current_chunk+1)
 
-        return {'image_id': self.data['image_id'][index-self.offset],
-                'image_name': self.data['image_name'][index-self.offset],
-                'image_embeddings': self.data['image_embeddings'][index-self.offset],
-                'text_embeddings': self.data['text_embeddings'][index-self.offset],
-                'captions': self.data['captions'][index-self.offset],
-                'labels': self.data['labels'][index-self.offset]}
+        payload = {}
+        for key in self.data.keys():
+            payload[key] = self.data[key][index-self.offset]
+
+        return payload
 
     def get_loader(self, batch_size):
         indices = np.arange(self.len)
@@ -160,15 +159,12 @@ class MIMICLoader(Dataset):
                                            collate_fn=self.collate_fn)
 
     def collate_fn(self, batch):
-        data = {'image_id': [],
-                'image_name': [],
-                'image_embeddings': [],
-                'text_embeddings': [],
-                'captions': [],
-                'labels': []}
-
+        data = {}
         for e in batch:
             for key in e.keys():
+                if key not in data.keys():
+                    data[key] = []
+
                 data[key].append(e[key])
 
         new_labels = {}
@@ -186,9 +182,11 @@ class MIMICLoader(Dataset):
                 new_labels[key] = torch.tensor(new_labels[key]).to(dtype=torch.long)
 
             data['labels'] = new_labels
+        if 'image_embeddings' in data.keys():
+            # loaded a pkl with embeddings
+            data['image_embeddings'] = torch.stack(data['image_embeddings'])
+            data['text_embeddings'] = torch.stack(data['text_embeddings'])
 
-        data['image_embeddings'] = torch.stack(data['image_embeddings'])
-        data['text_embeddings'] = torch.stack(data['text_embeddings'])
         return data
 
 

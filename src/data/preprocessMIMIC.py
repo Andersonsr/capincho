@@ -1,4 +1,5 @@
 import argparse
+import math
 import json
 import logging
 import os
@@ -49,16 +50,22 @@ if __name__ == '__main__':
             data['id'].append(i)
             data['image_name'].append(image_name)
             data['image_path'].append(image_path)
-            data['labels'].append(annotation['chexpert_labels'])
             data['findings'].append(annotation['conversations'][1]['value'].replace('\n', ''))
             data['image_tensor'].append(image)
-
+            new_labels = {}
+            old_labels = annotation['chexpert_labels']
+            for key in old_labels.keys():
+                if math.isnan(old_labels[key]):
+                    new_labels[key] = 3
+                else:
+                    new_labels[key] = 2 if old_labels[key] < 0 else old_labels[key]
+            data['labels'].append(new_labels)
             logging.debug('image {} shape: {}'.format(i, image.size))
-            
+
         if (i+1) % args.chunk_size == 0 or i == len(json_file) - 1:
             # save the chunk
             logging.info('chunk {}: {} images'.format(chunk_counter, len(data['image_name'])))
-            with open(os.path.join(args.output, f'chunk_{chunk_counter}.pkl'), 'wb') as f:
+            with open(os.path.join(args.output, f'chunk_{chunk_counter}_{args.dim}.pkl'), 'wb') as f:
                 pickle.dump(data, f)
 
             # start a new chunk
@@ -69,4 +76,3 @@ if __name__ == '__main__':
                     'labels': [],
                     'findings': [],
                     'image_tensor': []}
-    

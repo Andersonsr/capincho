@@ -2,17 +2,12 @@ import argparse
 import glob
 import logging
 import os
-import sys
 import pickle
 from tqdm import tqdm
 import torch
+from models.foundation_models import model_dict
 from torch.utils.data import Dataset
 import numpy as np
-
-# path trick
-path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
-sys.path.append(path)
-from models.foundation_models import model_dict
 
 
 class MIMICChunkLoader(Dataset):

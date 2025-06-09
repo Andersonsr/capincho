@@ -1,10 +1,8 @@
-import gc
 import math
-
+import random
 import matplotlib.pyplot as plt
 import numpy
 from tqdm import tqdm
-from PIL import Image
 import glob
 import cv2 as cv
 import pandas as pd
@@ -13,6 +11,7 @@ import torch
 import json
 import os
 import numpy as np
+from util import VALID_LABELS
 
 
 def rename_column(pkl_file: str):
@@ -116,7 +115,36 @@ def mimic_stats(filename, dataset_root):
             break
 
 
-def mimic_labels(filename, output_dir):
+def mimic_chunk_labels(filename):
+    '''
+    edit chunk file with reorganized labels
+    :param filename: chunk pkl file to edit
+    :return: None
+    '''
+    with open(filename, 'rb') as f:
+        data = pickle.load(f)
+        for i, e in enumerate(tqdm(data['labels'])):
+            # old labels: positive: 1, negative: 0, uncertain: -1, ignore: nan
+            # new labels: positive: 1, negative: 0, uncertain: 2, ignore: 3
+            new_labels = {}
+            for label in e.keys():
+                if math.isnan(e[label]):
+                    new_labels[label] = 3
+                else:
+                    new_labels[label] = 2 if e[label] < 0 else e[label]
+            data['labels'][i] = new_labels
+
+    with open(filename, 'wb') as f:
+        pickle.dump(data, f)
+
+
+def mimic_embeddings_labels(filename, output_dir):
+    '''
+    reorganize dataset labels for a embedding file removing all images with no findings
+    :param filename: input embeddings pkl
+    :param output_dir: output directory to save chunks
+    :return: None
+    '''
     from util import VALID_LABELS
     to_keep = []
     with open(filename, 'rb') as f:
@@ -210,4 +238,79 @@ def plot_means():
     print(torch.mean(means_a), torch.mean(means_f))
     plt.legend()
     plt.show()
+
+
+def labels_distribution(embeddings_dir):
+    labels_per_condition = {}
+    for label in VALID_LABELS:
+        labels_per_condition[label] = []
+    for chunk in glob.glob(os.path.join(embeddings_dir, '*.pkl'))[:1]:
+        with open(chunk, 'rb') as f:
+            data = pickle.load(f)
+            for sample in data['labels']:
+                for k, v in sample.items():
+                    labels_per_condition[k].append(v)
+
+    df = pd.DataFrame.from_dict(labels_per_condition)
+    out_dict = {'condition': [], 'positive': [], 'negative': [], 'uncertain': [], 'not present': []}
+    for label in VALID_LABELS:
+        counts = df[label].value_counts()
+        out_dict['condition'].append(label)
+        out_dict['positive'].append(counts[1])
+        out_dict['negative'].append(counts[0])
+        out_dict['uncertain'].append(counts[2])
+        out_dict['not present'].append(counts[3])
+
+    df = pd.DataFrame.from_dict(out_dict)
+    df.to_excel('D:\\mimic\\labels-distribution.xlsx', index=False)
+    print('saved to D:\\mimic\\labels-distribution.xlsx')
+    print(df)
+
+
+def samples(condition, chunk_file, n=3):
+    with open(chunk_file, 'rb') as f:
+        data = pickle.load(f)
+        # print(data.keys())
+        positives = []
+        negatives = []
+        uncertain = []
+        not_present = []
+        for i, sample in enumerate(data['labels']):
+            if sample[condition] == 1:
+                positives.append(data['captions'][i])
+            elif sample[condition] == 0:
+                negatives.append(data['captions'][i])
+            elif sample[condition] == 2:
+                uncertain.append(data['captions'][i])
+            elif sample[condition] == 3:
+                not_present.append(data['captions'][i])
+        print(condition)
+        print('-----------------positives-----------------')
+        for sample in random.sample(positives, n):
+            print(sample)
+            print()
+
+        print('-----------------negatives-----------------')
+        for sample in random.sample(negatives, n):
+            print(sample)
+            print()
+
+        print('-----------------uncertain-----------------')
+        for sample in random.sample(uncertain, n):
+            print(sample)
+            print()
+
+        print('-----------------not present-----------------')
+        for sample in random.sample(not_present, n):
+            print(sample)
+            print()
+
+
+if __name__ == '__main__':
+    # samples(VALID_LABELS[2], 'D:\\mimic\\processado\\mimic_train_224\\filtered\\chunk_1_224.pkl')
+    with open('D:\\mimic\\processado\\mimic_train_512\\chunks\\chunk_26_512.pkl', 'rb') as f:
+        data = pickle.load(f)
+
+        print(data['id'][-1])
+
 

@@ -108,7 +108,7 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
                       precision=fp,
                       add_noise=add_noise,
                       variance=variance,
-                      dimension=dimension,
+                      input_dimension=dimension,
                       normalize=normalize,
                       prefix_before_bos=before,
                       append_eos=append_eos)
@@ -126,13 +126,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
     optim = AdamW(decoder.parameters(), lr=lr)
 
-    logging.debug('DECODER SIZE')
-    # logging.debug(model_size(decoder.model))
-    logging.debug(learnable_parameters(decoder.model))
-
-    logging.debug('MAPPER SIZE')
-    # logging.debug(model_size(decoder.mapper))
-    logging.debug(learnable_parameters(decoder.mapper))
+    logging.debug('DECODER SIZE {}'.format(learnable_parameters(decoder.model)))
+    logging.debug('MAPPER SIZE {}'.format(learnable_parameters(decoder.mapper)))
 
     training_losses = []
     validation_losses = []

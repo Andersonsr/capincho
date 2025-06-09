@@ -24,13 +24,13 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 logger = logging.getLogger('captioning')
 
 
-class Model(ABC):
+class FoundationModel(ABC):
     def __init__(self, device):
         assert 'MODEL_CACHE' in os.environ, 'MODEL_CACHE environment variable is not defined'
         self.download_root = os.environ['MODEL_CACHE']
         self.backbone = None
         self.vision_preprocess = None
-        self.language_preprocess = None
+        self.tokenizer = None
         self.device = device
         self.dim = None
 
@@ -38,9 +38,10 @@ class Model(ABC):
     def load_model(self):
         pass
 
-    @abstractmethod
     def language_embedding(self, text):
-        pass
+        with torch.no_grad():
+            text = self.tokenizer(text)
+            return self.backbone.encode_text(text)
 
     def patch_image(self, image_path):
         image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
@@ -77,7 +78,7 @@ class Model(ABC):
 
         return torch.stack(patches_embeddings)
 
-    def visual_embedding(self, image, resize=False, crop=False):
+    def visual_embedding(self, image, resize=False, ):
         with torch.no_grad():
             if type(image) is str:
                 image = prepare_image(image, resize, dim=self.dim)
@@ -104,6 +105,7 @@ class Model(ABC):
 def prepare_image(image_path, resize=False, dim=224):
     # opencv works better when reading big images
     # print(image_path)
+    # crop image to 1x1 ratio and then resize
     image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
     image = Image.fromarray(image).convert('RGB')
     h, w = image.size
@@ -122,7 +124,7 @@ def prepare_image(image_path, resize=False, dim=224):
     return image
 
 
-class CLIP(Model):
+class CLIP(FoundationModel):
     def load_model(self):
         self.backbone, self.vision_preprocess = clip.load('ViT-L/14',
                                                           device=self.device,
@@ -135,9 +137,9 @@ class CLIP(Model):
             return self.backbone.encode_text(text)
 
 
-class OpenCoCa(Model):
+class OpenCoCa(FoundationModel):
     def language_embedding(self, text):
-        text = self.language_preprocess(text)
+        text = self.tokenizer(text)
         # print(text.shape, text)
         text = text[:, :76].to(self.device)
 
@@ -150,11 +152,11 @@ class OpenCoCa(Model):
             device=self.device,
             cache_dir=self.download_root
         )
-        self.language_preprocess = open_clip.get_tokenizer('ViT-L-14')
+        self.tokenizer = open_clip.get_tokenizer('ViT-L-14')
         self.dim = 224
 
 
-class SigLIP(Model):
+class SigLIP_384(FoundationModel):
     def load_model(self):
         self.backbone, _, self.vision_preprocess = open_clip.create_model_and_transforms(
             model_name="ViT-SO400M-14-SigLIP-384",
@@ -162,19 +164,20 @@ class SigLIP(Model):
             device=self.device,
             cache_dir=self.download_root
         )
-        self.language_preprocess = open_clip.get_tokenizer('ViT-L-14')
+        self.tokenizer = open_clip.get_tokenizer('ViT-L-14')
         self.dim = 384
 
-    def language_embedding(self, text):
-        text = self.language_preprocess(text)
-        return self.backbone.encode_text(text.to(self.device))
+
+class SigLIP_512(FoundationModel):
+    def load_model(self):
+        self.backbone, self.vision_preprocess = open_clip.create_model_from_pretrained('hf-hub:timm/ViT-B-16-SigLIP-512',
+                                                                   device=self.device,
+                                                                   cache_dir=self.download_root)
+        self.tokenizer = open_clip.get_tokenizer('hf-hub:timm/ViT-B-16-SigLIP-512')
+        self.dim = 512
 
 
-class OpenCLIP(Model):
-    def language_embedding(self, text):
-        text = self.language_preprocess(text)
-        return self.backbone.encode_text(text.to(self.device))
-
+class OpenCLIP(FoundationModel):
     def load_model(self):
         self.backbone, _, self.vision_preprocess = open_clip.create_model_and_transforms(
             model_name="ViT-L-14",
@@ -182,22 +185,21 @@ class OpenCLIP(Model):
             device=self.device,
             cache_dir=self.download_root
         )
-        self.language_preprocess = open_clip.get_tokenizer('ViT-L-14')
+        self.tokenizer = open_clip.get_tokenizer('ViT-L-14')
         self.dim = 224
 
 
-class Llip(Model):
+# TODO: implementar llip
+class Llip(FoundationModel):
     def load_model(self):
-        pass
-
-    def language_embedding(self, text):
         pass
 
 
 model_dict = {'coca': OpenCoCa,
               'clip': CLIP,
               'openclip': OpenCLIP,
-              'sig-lip': SigLIP}
+              'siglip-384': SigLIP_384,
+              'siglip-512': SigLIP_512}
 
 if __name__ == "__main__":
     # model = CLIP('cuda:0')
@@ -206,7 +208,11 @@ if __name__ == "__main__":
     # embeds = model.patch_embedding(crops)
     # logger = logging.getLogger('captioning')
     # logging.basicConfig(level=logging.DEBUG)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
+    model = SigLIP_512(device)
+    model.load_model()
+    image = Image.open('D:\\mimic\\mimic-cxr-jpg\\2.1.0\\files\\p10\\p10000032\\s50414267\\02aa804e-bde0afdd-112c0b34-7bc16630-4e384014.jpg')
+    image = model.vision_preprocess(image)
+    print(image.size())
 
-    models = llip.list_models()
-    print(models)
 

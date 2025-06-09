@@ -12,10 +12,14 @@ from projectionHeads import ResidualLearnableHead, LinearClassificationHead
 
 class ClassificationAdapter(nn.Module):
     def __init__(self, input_dim, initial_residual_ratio, classifiers_names, classifiers_outputs, logit_scale,
-                 device, contrastive=False):
+                 device, contrastive=False, identity=False):
         super(ClassificationAdapter, self).__init__()
         self.device = device
-        self.imageAdapter = ResidualLearnableHead(input_dim, initial_residual_ratio, False).to(self.device)
+        if identity:
+            self.imageAdapter = nn.Identity()
+        else:
+            self.imageAdapter = ResidualLearnableHead(input_dim, initial_residual_ratio, False).to(self.device)
+
         self.contrastive = contrastive
         self.logit_scale = nn.Parameter(logit_scale).to(self.device)
         self.classifiers = {}
@@ -34,8 +38,11 @@ class ClassificationAdapter(nn.Module):
         CE = nn.CrossEntropyLoss(ignore_index=self.classifiers_outputs)
         for classifier in self.classifiers.keys():
             logits = self.classifiers[classifier](image_embeddings)
+            print('EMBEDDINGS SHAPE IN ADAPTER', image_embeddings.shape)
+            print('LOGITS SHAPE', logits.shape)
+            print('LABELS', labels[classifier])
             loss = CE(logits, labels[classifier].to(self.device))
-            logging.debug(f'{classifier} loss: {loss}')
+            # logging.debug(f'{classifier} loss: {loss}')
             if np.isnan(loss.cpu().detach().numpy()):
                 # all labels are equal to ignore index
                 loss = torch.tensor(0.0).to(self.device)

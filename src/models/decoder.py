@@ -6,24 +6,20 @@ import logging
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 import math
-from transformers import T5Model, T5ForConditionalGeneration
-from transformers import T5Tokenizer
 from peft import LoraConfig, get_peft_model
-
-
+from huggingface_hub import login
 # path trick
 path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
 sys.path.append(path)
 from util import model_size, learnable_parameters
 from models.mapping import Mapper
 
-
 logger = logging.getLogger('captioning')
 
 
 class Decoder(nn.Module):
     def __init__(self, model_name, device, precision=torch.float16, prefix_length=10, add_noise=False, variance=0.016,
-                 dimension=768, normalize=False, prefix_before_bos=False, append_eos=False):
+                 input_dimension=768, normalize=False, prefix_before_bos=False, append_eos=False):
         super(Decoder, self).__init__()
         self.device = device
         self.before_bos = prefix_before_bos
@@ -34,10 +30,19 @@ class Decoder(nn.Module):
                 torch_dtype=precision,
             )
             self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+            self.bos_id = self.tokenizer.bos_token
+            self.eos_id = self.tokenizer.eos_token
+            self.ignore_id = -100
 
-        elif 't5' in model_name:
-            self.tokenizer = T5Tokenizer.from_pretrained(model_name)
-            self.model = T5ForConditionalGeneration.from_pretrained(model_name)
+        elif 'llama' in model_name:
+            assert 'HF_TOKEN' in os.environ.keys(), 'HF_TOKEN environment variable not set'
+            login(token=os.environ['HF_TOKEN'])
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=precision)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+            self.bos_id = self.tokenizer.bos_token_id
+            self.eos_id = self.tokenizer.eos_token_id
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.ignore_id = -100
 
         else:
             raise ValueError(f'{model_name} not supported')
@@ -48,8 +53,12 @@ class Decoder(nn.Module):
         self.hidden_size = self._get_hidden_size()
         self.prefix_length = prefix_length
         self.fp = precision
-        self.mapper = Mapper(dimension, self.hidden_size, self.prefix_length).to(dtype=precision)
+        self.mapper = Mapper(input_dimension, self.hidden_size, self.prefix_length).to(dtype=precision)
         self.normalize = normalize
+
+        logging.debug(f'hidden size: {self.hidden_size}')
+        logging.debug(f'BOS token id: {self.bos_id}')
+        logging.debug(f'EOS token id: {self.eos_id}')
 
         if self.device:
             self.model.to(self.device)
@@ -72,7 +81,7 @@ class Decoder(nn.Module):
         logging.debug(f'prefix shape: {prefix.shape}')
 
         # id do token de inicio de frase
-        bos_token = torch.ones((1, 1)).to(dtype=torch.long) * 2
+        bos_token = torch.ones((1, 1)).to(dtype=torch.long) * self.bos_id
         bos_token = bos_token.to(self.device)
         embeddings_layer = self.model.get_input_embeddings()
         bos_embeddings = embeddings_layer(bos_token)
@@ -97,7 +106,6 @@ class Decoder(nn.Module):
         logging.debug(f'Generated ids: {generated_ids}')
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
-    # TODO: adicionar opcao para achatar as embeddings dos patches e alterar o tamanho da entrada do mapper de acordo
     def forward(self, batch):
         embeddings = batch['embeddings'].to(dtype=self.fp)
         captions = batch['captions']
@@ -134,35 +142,34 @@ class Decoder(nn.Module):
         else:
             input_emb = torch.concat([captions_emb[:, :1, :], prefix_tokens, captions_emb[:, 1:, :]], dim=1).to(self.fp)
 
-        logging.debug(f'concatenated embeddings final shape: {input_emb.shape}')
-
         # labels for auto regressive CE training
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.device, dtype=self.fp)
         if self.append_eos:
             # 2 is the token for eos and bos
-            bos_token = torch.ones((labels.shape[0], 1)).to(dtype=torch.long) * 2
-            bos_token = bos_token.to(self.device)
+            eos_token = torch.ones((labels.shape[0], 1)).to(dtype=torch.long) * self.eos_id
+            eos_token = eos_token.to(self.device)
             embeddings_layer = self.model.get_input_embeddings()
-            bos_embeddings = embeddings_layer(bos_token).to(self.device)
+            eos_embeddings = embeddings_layer(eos_token).to(self.device)
 
             # concatenate eos/bos to labels and input embeddings
-            labels = torch.cat([labels, bos_token], dim=1)
-            input_emb = torch.cat((input_emb, bos_embeddings), dim=1)
+            labels = torch.cat([labels, eos_token], dim=1)
+            input_emb = torch.cat((input_emb, eos_embeddings), dim=1)
 
+        logging.debug(f'concatenated embeddings final shape: {input_emb.shape}')
         logging.debug('labels shape: {}'.format(labels.shape))
 
-        # ignore padding tokens, OPT ignores -100 labels during loss computation
-        labels[labels == self.tokenizer.pad_token_id] = -100
+        # ignore padding tokens
+        labels[labels == self.tokenizer.pad_token_id] = self.ignore_id
 
         # ignore prefix, set labels to skip prefix during loss computation
         ignore_size = self.prefix_length*p
-        ignore = torch.ones(input_emb.shape[0],  ignore_size) * -100
+        ignore = torch.ones(input_emb.shape[0],  ignore_size) * self.ignore_id
         logging.debug('ignore shape: {}'.format(ignore.shape))
 
         labels = labels.to(self.device)
         ignore = ignore.to(self.device)
         input_emb = input_emb.to(self.device)
-        # concatenate prefix labels (-100) and text labels
+        # concatenate prefix labels (ignore) and text labels
         if self.before_bos:
             labels = torch.concat([ignore, labels], dim=1)
 
@@ -219,7 +226,7 @@ def model_from_json(json_file, device):
     precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
     before_bos = config['before_bos'] if 'before_bos' in config else False
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
-                      add_noise=False, dimension=config['dimension'], prefix_before_bos=before_bos)
+                      add_noise=False, input_dimension=config['dimension'], prefix_before_bos=before_bos)
 
     checkpoint = torch.load(config['checkpoint_path'], map_location=device)
     if not os.path.exists(config['model_name']) and not config['full_finetune']:
@@ -236,11 +243,11 @@ def model_from_json(json_file, device):
 
 
 if '__main__' == __name__:
-    from dataLoaders import COCODataset
-    from trainDecoder import prepare_batch
+    from data.dataLoaders import COCODataset
+    from train.trainDecoder import prepare_batch
     parser = argparse.ArgumentParser()
     parser.add_argument('--embeddings',
-                        default='embeddings/foundation/openclip_patch_val.pkl',
+                        default='D:\\embeddings\\foundation\\coco\\openclip_val.pkl',
                         type=str,
                         help='embeddings pkl')
     parser.add_argument('--patch', action='store_true', default=False)
@@ -252,18 +259,19 @@ if '__main__' == __name__:
     logging.basicConfig(level=logging.DEBUG)
 
     # model
-    decoder = Decoder('facebook/opt-350m', device,
+    llama = 'meta-llama/Llama-3.2-1B'
+    opt = 'facebook/opt-350m'
+    decoder = Decoder(llama, device,
                       prefix_length=2,
-                      dimension=768,
+                      input_dimension=768,
                       normalize=True,
                       prefix_before_bos=args.before,)
 
-    output = decoder.tokenizer('outro texto de teste para teste de texto')
-    print(output, )
-
+    # output = decoder.tokenizer('outro texto de teste para teste de texto')
+    # print(output, )
     data = COCODataset(args.embeddings, 5)
     print(data[:].keys())
-    loader, indices = data.get_loader(batch_size=32)
+    loader = data.get_loader(batch_size=32)
     for batch in loader:
         batch = prepare_batch(batch, False, args.patch, device)
         print(batch['embeddings'].shape)

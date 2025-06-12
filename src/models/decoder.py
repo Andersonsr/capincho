@@ -39,9 +39,13 @@ class Decoder(nn.Module):
             login(token=os.environ['HF_TOKEN'])
             self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=precision)
             self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+
+            self.tokenizer.pad_token_id = 128001
+            self.tokenizer.eos_token_id = 128009
+
+            # used internally
             self.bos_id = self.tokenizer.bos_token_id
-            self.eos_id = self.tokenizer.eos_token_id
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.eos_id = 128009
             self.ignore_id = -100
 
         else:
@@ -64,7 +68,6 @@ class Decoder(nn.Module):
             self.model.to(self.device)
             self.mapper.to(self.device)
 
-    # TODO: Enable captioning of batched input
     def caption(self, embeddings, do_sample=False, max_tokens=200, seed=32, num_beams=1, top_k=None, top_p=None,
                 temperature=1.0, penalty_alpha=None, diversity_penalty=None):
         set_seed(seed)
@@ -77,6 +80,7 @@ class Decoder(nn.Module):
 
         logging.debug(f'reshaped embeddings shape:{embeddings.shape}')
         prefix = self.mapper(embeddings.to(dtype=self.fp)).view(-1, patches*self.prefix_length, self.hidden_size)
+
         # reshape to 1, patches*maper_out, decoder_dim
         logging.debug(f'prefix shape: {prefix.shape}')
 
@@ -86,16 +90,21 @@ class Decoder(nn.Module):
         embeddings_layer = self.model.get_input_embeddings()
         bos_embeddings = embeddings_layer(bos_token)
 
+
         if self.before_bos:
             prefix = torch.concat([prefix, bos_embeddings], dim=1)
         else:
             prefix = torch.concat([bos_embeddings, prefix], dim=1)
+
+        attention_mask = torch.ones((prefix.shape[0], prefix.shape[1])).to(self.device, dtype=torch.long)
+        print('ATTENTION SHAPE', attention_mask.shape)
 
         logging.debug(f'decoder input shape: {prefix.shape}')
 
         generated_ids = self.model.generate(do_sample=do_sample,
                                             max_new_tokens=max_tokens,
                                             inputs_embeds=prefix,
+                                            attention_mask=attention_mask,
                                             num_beams=num_beams,
                                             top_k=top_k,
                                             top_p=top_p,
@@ -158,6 +167,7 @@ class Decoder(nn.Module):
         logging.debug(f'concatenated embeddings final shape: {input_emb.shape}')
         logging.debug('labels shape: {}'.format(labels.shape))
 
+        # print('LABELS', labels[0])
         # ignore padding tokens
         labels[labels == self.tokenizer.pad_token_id] = self.ignore_id
 
@@ -171,9 +181,11 @@ class Decoder(nn.Module):
         input_emb = input_emb.to(self.device)
         # concatenate prefix labels (ignore) and text labels
         if self.before_bos:
+            # prefix, bos, text
             labels = torch.concat([ignore, labels], dim=1)
 
         else:
+            # bos, prefix, text
             labels = torch.concat([labels[:, :1], ignore, labels[:, 1:]], dim=1)
 
         logging.debug('final labels shape: {}'.format(labels.shape))
@@ -220,21 +232,24 @@ class Decoder(nn.Module):
 def model_from_json(json_file, device):
     import json
     import os
-    with open(json_file, 'r') as f:
-        config = json.load(f)
+    config = json.load(open(json_file, 'r'))
 
     precision = torch.float16 if config['fp'] == 'fp16' else torch.float32
     before_bos = config['before_bos'] if 'before_bos' in config else False
+    append_eos = config['append_eos'] if 'append_eos' in config else False
+
+    normalize = config['normalize'] if 'normalize' in config else False
+    # do not add noise during eval
     decoder = Decoder(config['model_name'], device, prefix_length=config['prefix_len'], precision=precision,
-                      add_noise=False, input_dimension=config['dimension'], prefix_before_bos=before_bos)
+                      add_noise=False, input_dimension=config['dimension'], prefix_before_bos=before_bos,
+                      normalize=normalize, append_eos=append_eos)
 
     checkpoint = torch.load(config['checkpoint_path'], map_location=device)
     if not os.path.exists(config['model_name']) and not config['full_finetune']:
-        # decoder model is on the hub, and is not adapted by default
+        # loaded model is on the hub and was not adapted before, need to create adapter
         decoder.lora_model(config['rank'], config['alpha'], config['dropout'])
 
     decoder.load_state_dict(checkpoint['model_state_dict'])
-    decoder.normalize = config['normalize']
 
     print('loaded model from {}'.format(json_file))
     learnable_parameters(decoder)
@@ -270,10 +285,10 @@ if '__main__' == __name__:
     # output = decoder.tokenizer('outro texto de teste para teste de texto')
     # print(output, )
     data = COCODataset(args.embeddings, 5)
-    print(data[:].keys())
+    # print(data[:].keys())
     loader = data.get_loader(batch_size=32)
     for batch in loader:
         batch = prepare_batch(batch, False, args.patch, device)
-        print(batch['embeddings'].shape)
+        print('embedding shape', batch['embeddings'].shape)
         decoder(batch)
         break

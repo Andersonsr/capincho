@@ -1,5 +1,7 @@
 import math
 import random
+import time
+
 import matplotlib.pyplot as plt
 import numpy
 from tqdm import tqdm
@@ -306,11 +308,62 @@ def samples(condition, chunk_file, n=3):
             print()
 
 
+def count_length(dirname):
+    import logging
+    import time
+    import gc
+    total_len = 0
+    cache = {}
+    chunks = glob.glob(os.path.join(dirname, "chunk*.pkl"))
+    for chunk in chunks:
+        logging.debug('loading chunk {} ...'.format(chunk))
+        starting_time = time.time()
+        with open(chunk, 'rb') as f:
+            data = None
+            gc.collect()
+            data = pickle.load(f)
+            ending_time = time.time()
+            logging.debug('load time: {}'.format(ending_time - starting_time))
+            length = len(data['image_name'])
+
+        logging.info('{} length is {}'.format(chunk, length))
+        cache[os.path.basename(chunk)] = length
+        total_len += length
+
+    with open(os.path.join(dirname, 'data_length.json'), 'w') as f:
+        json.dump(cache, f)
+
+
+def chunk_load_time():
+    chunks = glob.glob('D:\\mimic\\processado\\teste\\chunk*.pkl')
+    result = []
+    if os.path.exists('D:\\mimic\\processado\\teste\\data_length.json'):
+        with open('D:\\mimic\\processado\\teste\\data_length.json') as f:
+            result = json.load(f)
+
+    for chunk in chunks:
+        exist = False
+
+        for d in result:
+            if d['chunk'] == os.path.basename(chunk):
+                exist = True
+
+        if not exist:
+            print('loading chunk {} ...'.format(chunk))
+            start = time.time()
+            data = pickle.load(open(chunk, 'rb'))
+            end = time.time()
+            print('elapsed time', end - start)
+            result.append({'chunk': os.path.basename(chunk),
+                           'length': len(data['image_name']),
+                           'elapsed_time': end - start})
+
+    with open(os.path.join(os.path.dirname(chunks[0]), 'data_length.json'), 'w') as f:
+        json.dump(result, f, indent=2)
+
+    for r in result:
+        print('chunk size : {} , taxa: {}'.format(r['length'], r['length'] / r['elapsed_time']))
+
+
 if __name__ == '__main__':
-    # samples(VALID_LABELS[2], 'D:\\mimic\\processado\\mimic_train_224\\filtered\\chunk_1_224.pkl')
-    with open('D:\\mimic\\processado\\mimic_train_512\\chunks\\chunk_26_512.pkl', 'rb') as f:
-        data = pickle.load(f)
-
-        print(data['id'][-1])
-
-
+    count_length('D:\\mimic\\processado\\mimic_dev_224\\embeddings')

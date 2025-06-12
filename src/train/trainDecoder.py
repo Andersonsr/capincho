@@ -137,7 +137,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
     # training loop
     for epoch in range(epochs):
-
         log_loss = []
 
         i = 0
@@ -214,7 +213,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=2e-4, help='learning rate')
     parser.add_argument('--epochs', type=int, default=2, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
-    parser.add_argument('--embeddings', type=str, default='coco_openCLIP_train', help='embeddings filename')
+    parser.add_argument('--embeddings', type=str, required=True, help='embeddings filename')
     parser.add_argument('--rank', type=int, default=16, help='lora rank')
     parser.add_argument('--alpha', type=int, default=32, help='lora alpha parameter')
     parser.add_argument('--dropout', type=float, default=0.05, help='lora dropout parameter')

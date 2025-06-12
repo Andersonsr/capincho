@@ -1,7 +1,10 @@
 import argparse
 import gc
 import glob
+import json
 import logging
+import time
+
 from tqdm import tqdm
 import os.path
 import pickle
@@ -78,8 +81,12 @@ class MIMICLoader(Dataset):
     def __init__(self, dirname, chunks=None, unchanged_labels=False):
         assert os.path.exists(dirname), '{} does not exist'.format(dirname)
         if os.path.isdir(dirname):
+            logging.debug('searching for files in {}'.format(dirname))
             self.chunks = glob.glob(os.path.join(dirname, '*.pkl'))
+            logging.debug('found {} chunks'.format(len(self.chunks)))
+
         else:
+            logging.debug('single chunk {}'.format(dirname))
             self.chunks = [dirname]
 
         assert len(self.chunks) > 0, 'No .pkl files found in {}'.format(dirname)
@@ -89,14 +96,18 @@ class MIMICLoader(Dataset):
             self.chunks = self.chunks[:chunks]
 
         self.unchanged_labels = unchanged_labels
-        self.len = sum([len(pickle.load(open(d, 'rb'))['image_name']) for d in self.chunks])
+        self.len = 0
+        with open(os.path.join(dirname, 'data_length.json'), 'r') as f:
+            cache = json.load(f)
+            for chunk in self.chunks:
+                self.len += cache[os.path.basename(chunk)]
+
+        logging.debug('total number of images: {}'.format(self.len))
+
         self.data = {}
         self.current_chunk = 0
         self.offset = 0
         self.limit = 0
-
-        logging.debug('Chunks found: {}'.format(len(self.chunks)))
-        logging.debug('total length of chunks: {}'.format(self.len))
 
     def free_data(self):
         # free memory to load next chunk

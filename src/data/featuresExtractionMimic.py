@@ -5,9 +5,12 @@ import os
 import pickle
 from tqdm import tqdm
 import torch
+import sys
+import numpy as np
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
 from models.foundation_models import model_dict
 from torch.utils.data import Dataset
-import numpy as np
 
 
 class MIMICChunkLoader(Dataset):

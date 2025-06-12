@@ -40,7 +40,7 @@ class FoundationModel(ABC):
 
     def language_embedding(self, text):
         with torch.no_grad():
-            text = self.tokenizer(text)
+            text = self.tokenizer(text.to(self.device))
             return self.backbone.encode_text(text)
 
     def patch_image(self, image_path):

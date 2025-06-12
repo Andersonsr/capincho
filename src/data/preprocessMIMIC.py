@@ -42,6 +42,7 @@ if __name__ == '__main__':
             'image_tensor': []}
     
     chunk_counter = 0
+    data_length = {}
     for i, annotation in tqdm(enumerate(json_file), total=len(json_file)):
         image_name = '/'.join(annotation['image'].split('/')[1:])
         image_path = os.path.join(args.dataset_root, image_name)
@@ -67,7 +68,7 @@ if __name__ == '__main__':
             logging.info('chunk {}: {} images'.format(chunk_counter, len(data['image_name'])))
             with open(os.path.join(args.output, f'chunk_{chunk_counter}_{args.dim}.pkl'), 'wb') as f:
                 pickle.dump(data, f)
-
+            data_length[f'chunk_{chunk_counter}_{args.dim}.pkl'] = len(data['id'])
             # start a new chunk
             chunk_counter += 1
             data = {'id': [],
@@ -76,3 +77,7 @@ if __name__ == '__main__':
                     'labels': [],
                     'findings': [],
                     'image_tensor': []}
+
+    with open(os.path.join(args.output, 'data_length.json'), 'w') as f:
+        json.dump(data_length, f)
+

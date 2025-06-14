@@ -15,6 +15,8 @@ from util import model_size, learnable_parameters
 from models.mapping import Mapper
 
 logger = logging.getLogger('captioning')
+# for key in os.environ.keys():
+#     print(key, os.environ[key])
 
 
 class Decoder(nn.Module):
@@ -23,6 +25,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.device = device
         self.before_bos = prefix_before_bos
+        self.precision = precision
 
         if 'opt' in model_name:
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -30,18 +33,20 @@ class Decoder(nn.Module):
                 torch_dtype=precision,
             )
             self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-            self.bos_id = self.tokenizer.bos_token
-            self.eos_id = self.tokenizer.eos_token
             self.ignore_id = -100
 
         elif 'llama' in model_name:
             assert 'HF_TOKEN' in os.environ.keys(), 'HF_TOKEN environment variable not set'
-            login(token=os.environ['HF_TOKEN'])
+            # login(token=os.environ['HF_TOKEN'])
             self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=precision)
             self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-            self.bos_id = self.tokenizer.bos_token_id
-            self.eos_id = self.tokenizer.eos_token_id
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+            # <|eot_id|> = 128009, <|end_of_text|> = 128001
+            self.tokenizer.pad_token_id = 128009
+            self.model.generation_config.pad_token_id = 128009
+
+            self.tokenizer.eos_token_id = 128001
+            self.model.generation_config.eos_token_id = 128001
             self.ignore_id = -100
 
         else:
@@ -57,8 +62,11 @@ class Decoder(nn.Module):
         self.normalize = normalize
 
         logging.debug(f'hidden size: {self.hidden_size}')
-        logging.debug(f'BOS token id: {self.bos_id}')
-        logging.debug(f'EOS token id: {self.eos_id}')
+        logging.debug(f'BOS token id: {self.tokenizer.bos_token_id}')
+        logging.debug(f'EOS token: {self.tokenizer.eos_token}')
+        logging.debug(f'EOS token id: {self.tokenizer.eos_token_id}')
+        logging.debug(f'PAD token: {self.tokenizer.pad_token}')
+        logging.debug(f'PAD token id: {self.tokenizer.pad_token_id}')
 
         if self.device:
             self.model.to(self.device)
@@ -81,7 +89,7 @@ class Decoder(nn.Module):
         logging.debug(f'prefix shape: {prefix.shape}')
 
         # id do token de inicio de frase
-        bos_token = torch.ones((1, 1)).to(dtype=torch.long) * self.bos_id
+        bos_token = torch.ones((1, 1)).to(dtype=torch.long) * self.tokenizer.bos_token_id
         bos_token = bos_token.to(self.device)
         embeddings_layer = self.model.get_input_embeddings()
         bos_embeddings = embeddings_layer(bos_token)
@@ -92,10 +100,11 @@ class Decoder(nn.Module):
             prefix = torch.concat([bos_embeddings, prefix], dim=1)
 
         logging.debug(f'decoder input shape: {prefix.shape}')
-
+        attention_mask = torch.ones(prefix.shape[:2]).to(self.device, dtype=self.precision)
         generated_ids = self.model.generate(do_sample=do_sample,
                                             max_new_tokens=max_tokens,
                                             inputs_embeds=prefix,
+                                            attention_mask=attention_mask,
                                             num_beams=num_beams,
                                             top_k=top_k,
                                             top_p=top_p,
@@ -116,6 +125,9 @@ class Decoder(nn.Module):
             embeddings = embeddings.to(self.device)
         if self.normalize:
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
+
+        if self.append_eos:
+            captions = [caption + self.tokenizer.eos_token for caption in captions]
 
         # batch size, patches, model dim
         b, p, d = embeddings.shape
@@ -144,16 +156,6 @@ class Decoder(nn.Module):
 
         # labels for auto regressive CE training
         labels = self.tokenizer(captions, return_tensors="pt", padding=True).input_ids.to(self.device, dtype=self.fp)
-        if self.append_eos:
-            # 2 is the token for eos and bos
-            eos_token = torch.ones((labels.shape[0], 1)).to(dtype=torch.long) * self.eos_id
-            eos_token = eos_token.to(self.device)
-            embeddings_layer = self.model.get_input_embeddings()
-            eos_embeddings = embeddings_layer(eos_token).to(self.device)
-
-            # concatenate eos/bos to labels and input embeddings
-            labels = torch.cat([labels, eos_token], dim=1)
-            input_emb = torch.cat((input_emb, eos_embeddings), dim=1)
 
         logging.debug(f'concatenated embeddings final shape: {input_emb.shape}')
         logging.debug('labels shape: {}'.format(labels.shape))
@@ -265,12 +267,15 @@ if '__main__' == __name__:
                       prefix_length=2,
                       input_dimension=768,
                       normalize=True,
-                      prefix_before_bos=args.before,)
+                      prefix_before_bos=args.before,
+                      append_eos=True)
 
-    # output = decoder.tokenizer('outro texto de teste para teste de texto')
-    # print(output, )
+    output = decoder.tokenizer(['outro texto de teste para teste de texto', 'texto curto'],
+                               return_tensors='pt', padding=True)
+    # print('tokenized', output['input_ids'])
+    # tokens = decoder.tokenizer(['<|eot_id|> <|end_of_text|>'])
+    # print(tokens)
     data = COCODataset(args.embeddings, 5)
-    print(data[:].keys())
     loader = data.get_loader(batch_size=32)
     for batch in loader:
         batch = prepare_batch(batch, False, args.patch, device)

@@ -65,12 +65,7 @@ if __name__ == '__main__':
 
     for i, name in enumerate(paths):
         if 'adapter_' in name:
-            if 'sig' in name:
-                adapter = SigAdapter(768, 0.2, torch.ones([]), torch.ones([]), ).to(device)
-
-            else:
-                adapter = ContrastiveResidualAdapter(768, 0.2, model.logit_scale, False)
-
+            adapter = ContrastiveResidualAdapter(768, 0.2, model.logit_scale, False)
             checkpoint = torch.load(f'checkpoints/contrastive/coco_openclip_adapter.pt')
             adapter.load_state_dict(checkpoint['model_state_dict'])
             result = evaluate_image_text(f'embeddings/{name}',

@@ -10,7 +10,6 @@ Some examples from coco dataset, after training for 2 epochs only while learning
 ![image 1](figs/captions_000000139684.jpg)
 
 ### Installation ###
-
 1. create python 3.12 env
 
 ````angular2html

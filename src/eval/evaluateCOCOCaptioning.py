@@ -48,7 +48,7 @@ if __name__ == '__main__':
         decoder.collapse = means
 
     logging.info('\n Evaluating captioning \n')
-    coco = COCO('datasets_torchvision/coco_2017/annotations/captions_val2017.json')
+    coco = COCO('D:/datasets_torchvision/coco_2017/annotations/captions_val2017.json')
 
     if args.qualitative:
         random.seed(args.random_seed)
@@ -64,7 +64,7 @@ if __name__ == '__main__':
             text_gt = 'GT: {}\n'.format(ann[0]['caption'])
             text_gen = 'GENERATED: {}\n'.format(generated[0])
 
-            image = Image.open('datasets_torchvision/coco_2017/val2017/{}'.format(embeddings[i]['image_name']))
+            image = Image.open('D:/datasets_torchvision/coco_2017/val2017/{}'.format(embeddings[i]['image_name']))
             w, h = image.size[:2]
             font = ImageFont.truetype("fonts/Instruction.ttf", 16)
             lim = int(w / 10)
@@ -89,9 +89,10 @@ if __name__ == '__main__':
             logging.info(f'generating captions at {name}')
             data = embeddings[:]
             if args.patched:
-                embeddings = data['image_embeddings']
-            else:
                 embeddings = data['patch_embeddings']
+
+            else:
+                embeddings = data['image_embeddings']
 
             logging.debug(f'embedding shape: {embeddings[0].shape}')
 
@@ -103,7 +104,8 @@ if __name__ == '__main__':
             with open(name, 'w') as f:
                 json.dump(results, f, indent=2)
         else:
-            assert os.path.isfile(name), f'{name} does not exist'
+            assert os.path.isfile(name), (f'{name} doe'
+                                          f's not exist')
             logging.info(f'loading results from {name}')
 
         res = coco.loadRes(name)

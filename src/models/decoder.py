@@ -101,7 +101,7 @@ class Decoder(nn.Module):
             prefix = torch.concat([bos_embeddings, prefix], dim=1)
 
         attention_mask = torch.ones((prefix.shape[0], prefix.shape[1])).to(self.device, dtype=torch.long)
-        print('ATTENTION SHAPE', attention_mask.shape)
+        # print('ATTENTION SHAPE', attention_mask.shape)
 
         logging.debug(f'decoder input shape: {prefix.shape}')
         attention_mask = torch.ones(prefix.shape[:2]).to(self.device, dtype=self.precision)

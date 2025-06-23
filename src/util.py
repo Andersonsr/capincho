@@ -51,10 +51,14 @@ VALID_LABELS = ['Atelectasis',
 def plot_curves(training, validation, output_name):
     import matplotlib.pyplot as plt
     plt.plot(training, label=f'training loss')
-    plt.plot(validation, label=f'validation loss')
+
+    if len(validation) > 0:
+        scale = len(training) // len(validation)
+        val_Step = [i*scale-1 for i in range(len(validation))]
+        plt.plot(val_Step, validation, label=f'validation loss')
+        plt.text(len(validation), validation[-1], f'{validation[-1]:.3}')
 
     plt.text(len(training), training[-1], f'{training[-1]:.3}')
-    plt.text(len(validation), validation[-1], f'{validation[-1]:.3}')
 
     plt.title(f'training loss')
     plt.legend()
@@ -79,10 +83,10 @@ def model_size(model):
     import torch
     size_model = 0
     for param in model.parameters():
-        if param.df.is_floating_point():
-            size_model += param.numel() * torch.finfo(param.df.dtype).bits
+        if param.is_floating_point():
+            size_model += param.numel() * torch.finfo(param.dtype).bits
         else:
-            size_model += param.numel() * torch.iinfo(param.df.dtype).bits
+            size_model += param.numel() * torch.iinfo(param.dtype).bits
     return f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB"
 
 

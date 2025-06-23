@@ -40,8 +40,31 @@ class FoundationModel(ABC):
 
     def language_embedding(self, text):
         with torch.no_grad():
-            text = self.tokenizer(text.to(self.device))
+            text = self.tokenizer(text).to(self.device)
             return self.backbone.encode_text(text)
+
+    def visual_embedding(self, image, resize=False, ):
+        with torch.no_grad():
+            if type(image) is str:
+                image = prepare_image(image, resize, dim=self.dim)
+                image = self.vision_preprocess(image).unsqueeze(0)
+
+            elif type(image) is list:
+                if len(image) > 1:
+                    image = [self.vision_preprocess(im) for im in image]
+                    image = torch.stack(image).to(self.device)
+                    logging.debug('Image embeddings shape: {}'.format(image.shape))
+
+                elif len(image) == 1:
+                    image = self.vision_preprocess(image[0]).unsqueeze(0)
+
+                else:
+                    raise IndexError('Image list is empty')
+
+            else:
+                image = self.vision_preprocess(image).unsqueeze(0)
+
+            return self.backbone.encode_image(image)
 
     def patch_image(self, image_path):
         image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
@@ -68,38 +91,8 @@ class FoundationModel(ABC):
         text_features /= text_features.norm(dim=-1, keepdim=True)
         return (image_features @ text_features.T).max()
 
-    def patch_embedding(self, image_path):
-        patches_embeddings = []
-        patches = self.patch_image(image_path)
-        with torch.no_grad():
-            for image in patches:
-                image = self.vision_preprocess(image).unsqueeze(0).to(self.device)
-                patches_embeddings.append(self.backbone.encode_image(image))
-
-        return torch.stack(patches_embeddings)
-
-    def visual_embedding(self, image, resize=False, ):
-        with torch.no_grad():
-            if type(image) is str:
-                image = prepare_image(image, resize, dim=self.dim)
-                image = self.vision_preprocess(image).unsqueeze(0)
-
-            elif type(image) is list:
-                if len(image) > 1:
-                    image = [self.vision_preprocess(im) for im in image]
-                    image = torch.stack(image).to(self.device)
-                    logging.debug('Image embeddings shape: {}'.format(image.shape))
-
-                elif len(image) == 1:
-                    image = self.vision_preprocess(image[0]).unsqueeze(0)
-
-                else:
-                    raise IndexError('Image list is empty')
-
-            else:
-                image = self.vision_preprocess(image).unsqueeze(0)
-
-            return self.backbone.encode_image(image)
+    def grid_features(self, image_path):
+        pass
 
 
 def prepare_image(image_path, resize=False, dim=224):
@@ -201,7 +194,10 @@ model_dict = {'coca': OpenCoCa,
               'siglip-384': SigLIP_384,
               'siglip-512': SigLIP_512}
 
+
 if __name__ == "__main__":
+    from torch import nn
+    import timm
     # model = CLIP('cuda:0')
     # model.load_model()
     # crops = model.patch_image('./plots/cars result.png')
@@ -209,10 +205,26 @@ if __name__ == "__main__":
     # logger = logging.getLogger('captioning')
     # logging.basicConfig(level=logging.DEBUG)
     device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
-    model = SigLIP_512(device)
+    model = model_dict['openclip'](device)
     model.load_model()
     image = Image.open('D:\\mimic\\mimic-cxr-jpg\\2.1.0\\files\\p10\\p10000032\\s50414267\\02aa804e-bde0afdd-112c0b34-7bc16630-4e384014.jpg')
-    image = model.vision_preprocess(image)
-    print(image.size())
+    image = model.vision_preprocess(image).unsqueeze(0).to(device)
+    global _output
+
+    def hook_(module, input, output):
+        global _output
+        _output = output
+
+
+    output = model.backbone.visual(image, output_hidden_states=True)
+    print(output.shape)
+    # model = timm.create_model(
+    #     'vit_base_patch16_siglip_512',
+    #     pretrained=True,
+    #     num_classes=0,
+    # )
+    #
+    # print(image.shape)
+    # print(model.forward_features(image).shape)
 
 

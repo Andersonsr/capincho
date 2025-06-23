@@ -198,6 +198,13 @@ class MIMICLoader(Dataset):
             data['image_embeddings'] = torch.stack(data['image_embeddings'])
             data['text_embeddings'] = torch.stack(data['text_embeddings'])
 
+        # if 'image_tensor' in data.keys():
+        #     h, w = data['image_tensor'][0].size
+        #     b = len(data['image_tensor'])
+        #     images = np.asarray(data['image_tensor']).reshape((b, 3, w, h))
+        #     logging.debug('batch image shape {}'. format(images.shape))
+        #     data['image_tensor'] = torch.tensor(images)
+
         return data
 
 
@@ -322,8 +329,10 @@ if __name__ == '__main__':
     for epoch in range(3):
         for i, batch in tqdm(enumerate(loader), total=len(loader)):
             if i == 0 and epoch == 0:
-                print('image embeddings', batch['image_embeddings'].shape)
-                print('text embeddings', batch['text_embeddings'].shape)
-                print(batch['labels'])
-            pass
+                if 'image_embeddings' in batch.keys():
+                    print('image embeddings', batch['image_embeddings'].shape)
+                    print('text embeddings', batch['text_embeddings'].shape)
+                print('image tensor', batch['image_tensor'].shape)
+                print(batch['labels'].keys())
+            break
 

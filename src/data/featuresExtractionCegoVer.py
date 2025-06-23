@@ -33,6 +33,7 @@ if __name__ == '__main__':
     model = model_dict[args.model](device)
     model.load_model()
 
+
     with open(args.filename, 'rb') as f:
         json_object = json.load(f)
         for key in json_object.keys():

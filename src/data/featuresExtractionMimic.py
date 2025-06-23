@@ -70,6 +70,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = 'cpu'
     chunks = glob.glob(os.path.join(args.dirname, '*.pkl'))
 
     logger = logging.getLogger('captioning')

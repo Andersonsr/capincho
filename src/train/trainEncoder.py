@@ -43,6 +43,7 @@ if __name__ == '__main__':
     logging.info('Loading data...')
     if args.dataset == 'mimic':
         train_data = MIMICLoader(args.data, )
+
         val_data = MIMICLoader(args.data.replace('train', 'dev'), )
     else:
         raise NotImplementedError
@@ -95,13 +96,13 @@ if __name__ == '__main__':
             step_classifier_loss[classifier] = []
 
         # training loop
-        for i, batch in tqdm(enumerate(train_dataloader), desc="Epoch {}".format(epoch)):
+        for i, batch in tqdm(enumerate(train_dataloader), desc="Epoch {}".format(epoch), total=len(train_dataloader)):
             embeddings = foundation.visual_embedding(batch['image_tensor'])
             if len(embeddings.shape) == 2:
                 embeddings = embeddings.unsqueeze(dim=1)
 
             if epoch == 0 and i == 0:
-                logging.debug('image shape: {}'.format(batch.image_tensor.shape))
+                # logging.debug('image shape: {}'.format(batch.image_tensor.shape))
                 logging.debug('embedding shape'.format(embeddings.shape))
 
             batch['image_embeddings'] = embeddings

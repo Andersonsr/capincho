@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 import clip
 import os
 import cv2
+from longclip import longclip
 
 try:
     import Llip.llip.open_clip as llip
@@ -117,6 +118,17 @@ def prepare_image(image_path, resize=False, dim=224):
     return image
 
 
+class LongCLIP(FoundationModel):
+    def load_model(self):
+        self.backbone, self.vision_preprocess = longclip.load("./checkpoints/longclip-B.pt", device=self.device)
+        self.dim = 224
+
+    def language_embedding(self, text):
+        with torch.no_grad():
+            text = longclip.tokenize(text).to(self.device)
+            return self.backbone.encode_text(text)
+
+
 class CLIP(FoundationModel):
     def load_model(self):
         self.backbone, self.vision_preprocess = clip.load('ViT-L/14',
@@ -189,42 +201,16 @@ class Llip(FoundationModel):
 
 
 model_dict = {'coca': OpenCoCa,
+
               'clip': CLIP,
               'openclip': OpenCLIP,
+              'longclip': LongCLIP,
               'siglip-384': SigLIP_384,
               'siglip-512': SigLIP_512}
 
 
 if __name__ == "__main__":
-    from torch import nn
-    import timm
-    # model = CLIP('cuda:0')
-    # model.load_model()
-    # crops = model.patch_image('./plots/cars result.png')
-    # embeds = model.patch_embedding(crops)
-    # logger = logging.getLogger('captioning')
-    # logging.basicConfig(level=logging.DEBUG)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
-    model = model_dict['openclip'](device)
-    model.load_model()
-    image = Image.open('D:\\mimic\\mimic-cxr-jpg\\2.1.0\\files\\p10\\p10000032\\s50414267\\02aa804e-bde0afdd-112c0b34-7bc16630-4e384014.jpg')
-    image = model.vision_preprocess(image).unsqueeze(0).to(device)
-    global _output
-
-    def hook_(module, input, output):
-        global _output
-        _output = output
-
-
-    output = model.backbone.visual(image, output_hidden_states=True)
-    print(output.shape)
-    # model = timm.create_model(
-    #     'vit_base_patch16_siglip_512',
-    #     pretrained=True,
-    #     num_classes=0,
-    # )
-    #
-    # print(image.shape)
-    # print(model.forward_features(image).shape)
-
+   model = model_dict['longclip']('device')
+   model.load_model()
+   model.language_embedding('oi tudo bem')
 

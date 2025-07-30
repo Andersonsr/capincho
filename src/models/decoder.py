@@ -7,11 +7,10 @@ import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 import math
 from peft import LoraConfig, get_peft_model
-from huggingface_hub import login
 # path trick
 path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
 sys.path.append(path)
-from util import model_size, learnable_parameters
+from util import learnable_parameters
 from models.mapping import Mapper
 
 logger = logging.getLogger('captioning')

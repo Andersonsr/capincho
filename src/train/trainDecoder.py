@@ -250,6 +250,8 @@ if __name__ == '__main__':
     logging.debug(f'precision: {precision}')
     cfg_path = os.path.join(args.model_name, 'adapter_config.json')
 
+    # /home/users/adsdrosa/datasets / mimic / train_split_llava.json
+
     if os.path.exists(cfg_path):
         logging.debug('decoder was adapted before')
         with open(cfg_path, 'rb') as f:

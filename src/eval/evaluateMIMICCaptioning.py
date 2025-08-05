@@ -14,7 +14,7 @@ from data.dataLoaders import (MIMICLoader)
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Evaluate MIMIC captioning, a results.json file will be created at model dir')
-    parser.add_argument('--embeddings', type=str, required=True, help='path to embeddings directory')
+    parser.add_argument('--embeddings', type=str, required=True, help='path to embeddings file')
     parser.add_argument('--model', type=str, required=True, help='path to model experiment file')
     parser.add_argument('--overwrite', action='store_true', default=False,
                         help='generate captions even if results file already exists')

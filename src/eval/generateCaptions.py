@@ -62,7 +62,7 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
 
     generated = []
-    for i in tqdm([random.randint(0, len(data)) for i in range(args.num_images)]):
+    for i in tqdm([random.randint(0, len(data)) for i in range(min(args.num_images, len(data)))]):
         # print(data[i]['image_embeddings'].shape)
         if args.dataset == 'petro-txt':
             embedding = data[i]['text_embeddings']

@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, required=True, help='path to save the extracted features')
     parser.add_argument('--path', type=str, required=True, help='path to xlsx file with text and ids')
     parser.add_argument('--model', type=str, required=True, help='model to use for feature extraction',
-                        choices=['clip', 'openclip', 'coca', 'sig-lip'])
+                        choices=model_dict.keys())
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     parser.add_argument('--patched', action='store_true', help='patche images', default=False)
     parser.add_argument('--resize', action='store_true', help='resize images to fit the encoder', default=False)

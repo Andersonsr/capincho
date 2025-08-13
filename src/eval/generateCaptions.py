@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--split', type=str, default='all', choices=['train', 'val'],
                         help='split to load for evaluation, if all embeddings are in the same file')
     parser.add_argument('--random_seed', type=int, default=777, help='random seed for qualitative evaluation')
-    parser.add_argument('--num_images', '-n', type=int, default=10, help='number of images to evaluate')
+    parser.add_argument('--num_images', '-n', type=int, default=None, help='number of images to evaluate')
     parser.add_argument('--dataset', type=str, required=True,
                         choices=['petro', 'petro-txt', 'coco', 'mimic'])
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode')
@@ -62,7 +62,12 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
 
     generated = []
-    for i in tqdm([random.randint(0, len(data)) for i in range(min(args.num_images, len(data)))]):
+    if args.num_images is not None:
+        samples = [random.randint(0, len(data)) for i in range(min(args.num_images, len(data)))]
+    else:
+        samples = range(len(data))
+
+    for i in tqdm(samples):
         # print(data[i]['image_embeddings'].shape)
         if args.dataset == 'petro-txt':
             embedding = data[i]['text_embeddings']

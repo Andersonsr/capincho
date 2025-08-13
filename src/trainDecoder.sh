@@ -7,7 +7,8 @@ python train/trainDecoder.py \
     --normalize \
     --append_eos \
     --dataset petro \
-    --save_path E:models/mimic/cls4ml-opt
+    --save_path checkpoints/test \
+    --model_name meta-llama/Llama-3.2-1B
 
 
 

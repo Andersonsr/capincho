@@ -3,9 +3,15 @@ import torch
 from PIL import Image, ImageFile
 from abc import ABC, abstractmethod
 import clip
-import os
+import os, sys
 import cv2
-from longclip import longclip
+# path trick
+path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
+sys.path.append(path)
+from models.longclip import longclip
+from transformers import AutoImageProcessor, AutoModel
+from util import learnable_parameters
+
 
 try:
     import Llip.llip.open_clip as llip
@@ -65,27 +71,7 @@ class FoundationModel(ABC):
             else:
                 image = self.vision_preprocess(image).unsqueeze(0)
 
-            return self.backbone.encode_image(image)
-
-    def patch_image(self, image_path):
-        image = cv2.imread(image_path, cv2.IMREAD_COLOR_RGB)
-        image = Image.fromarray(image).convert('RGB')
-        w, h = image.size
-        logger.debug('original dim {}x{}'.format(image.size[0], image.size[1]))
-        if w != h:
-            image = image.crop((0, 0, min([h, w]), min([h, w])))
-            logger.debug('patch dim {}x{}'.format(image.size[0], image.size[1]))
-
-        w, h = image.size
-        crops = []
-        resize_dim = min(w // 2, self.dim)
-        crops.append(image.crop((0, 0, w // 2, h // 2)).resize((resize_dim, resize_dim)))
-        crops.append(image.crop((w // 2, 0, w, h // 2)).resize((resize_dim, resize_dim)))
-        crops.append(image.crop((0, h // 2, w // 2, h)).resize((resize_dim, resize_dim)))
-        crops.append(image.crop((w // 2, h // 2, w, h)).resize((resize_dim, resize_dim)))
-        logger.debug('patch resized dim {}x{}'.format(crops[0].size[0], crops[0].size[1]))
-
-        return crops
+            return self.backbone.encode_image(image.to(self.device))
 
     def similarity(self, text_features, image_features):
         image_features /= image_features.norm(dim=-1, keepdim=True)
@@ -194,23 +180,108 @@ class OpenCLIP(FoundationModel):
         self.dim = 224
 
 
-# TODO: implementar llip
-class Llip(FoundationModel):
+class DinoV3(FoundationModel):
     def load_model(self):
-        pass
+        pretrained_model_name = "facebook/dinov3-vitb16-pretrain-lvd1689m"
+        self.vision_preprocess = AutoImageProcessor.from_pretrained(pretrained_model_name)
+        self.backbone = AutoModel.from_pretrained(
+            pretrained_model_name,
+        )
+        self.backbone.to(self.device)
+
+    def visual_embedding(self, image, resize=False, ):
+        if type(image) is str:
+            inputs = self.vision_preprocess(images=Image.open(image), return_tensors="pt")
+
+        elif type(image) is list:
+            if len(image) > 1:
+                inputs = self.vision_preprocess(images=image, return_tensors="pt")
+
+            elif len(image) == 1:
+                inputs = self.vision_preprocess(images=image[0], return_tensors="pt")
+
+            else:
+                raise IndexError('Image list is empty')
+
+        else:
+            inputs = self.vision_preprocess(images=image, return_tensors="pt")
+
+        output = self.backbone(**inputs.to(self.device))
+        return output.pooler_output
+
+    def language_embedding(self, text):
+        if type(text) == str:
+            return torch.ones((1, 768))
+
+        if type(text) == list:
+            return torch.ones((len(text), 768))
+
+
+class DinoV2(FoundationModel):
+    def load_model(self):
+        model_name = 'facebook/dinov2-base'
+        self.vision_preprocess = AutoImageProcessor.from_pretrained(model_name)
+        self.backbone = AutoModel.from_pretrained(
+            model_name,)
+        self.backbone.to(self.device)
+
+    def visual_embedding(self, image, resize=False, ):
+        if type(image) is str:
+            inputs = self.vision_preprocess(images=Image.open(image), return_tensors="pt")
+
+        elif type(image) is list:
+            if len(image) > 1:
+                inputs = self.vision_preprocess(images=image, return_tensors="pt")
+
+            elif len(image) == 1:
+                inputs = self.vision_preprocess(images=image[0], return_tensors="pt")
+
+            else:
+                raise IndexError('Image list is empty')
+
+        else:
+            inputs = self.vision_preprocess(images=image, return_tensors="pt")
+
+        inputs.to(self.device)
+        output = self.backbone(**inputs)
+        return output.pooler_output
+
+    def language_embedding(self, text):
+        if type(text) == str:
+            return torch.ones((1, 768))
+
+        if type(text) == list:
+            return torch.ones((len(text), 768))
 
 
 model_dict = {'coca': OpenCoCa,
-
               'clip': CLIP,
               'openclip': OpenCLIP,
               'longclip': LongCLIP,
               'siglip-384': SigLIP_384,
-              'siglip-512': SigLIP_512}
+              'siglip-512': SigLIP_512,
+              'dinov2': DinoV2,
+              'dinov3': DinoV3}
 
 
 if __name__ == "__main__":
-   model = model_dict['longclip']('device')
-   model.load_model()
-   model.language_embedding('oi tudo bem')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    text = 'texto de teste'
+
+    for key in ['dinov2', 'dinov3', 'openclip']:
+        model = model_dict[key](device)
+        model.load_model()
+        if 'dino' in key:
+            print(key, learnable_parameters(model.backbone))
+
+        else:
+            # print(model.backbone)
+            print(key, learnable_parameters(model.backbone.visual))
+
+
+    # embeddings = model.visual_embedding('C:/Users/Usuario/PycharmProjects/capincho/src/models/img.png')
+    # embeddings = model.language_embedding(text)
+    # print(embeddings.shape)
+
+
 

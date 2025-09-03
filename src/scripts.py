@@ -1,7 +1,6 @@
 import math
 import random
 import time
-
 import matplotlib.pyplot as plt
 import numpy
 from tqdm import tqdm
@@ -14,7 +13,7 @@ import json
 import os
 import numpy as np
 from util import VALID_LABELS
-
+from pycocotools.coco import COCO
 
 def rename_column(pkl_file: str):
     data_dict = {'image_features': [], 'labels': []}
@@ -368,8 +367,50 @@ def chunk_load_time():
         print('chunk size : {} , taxa: {}'.format(r['length'], r['length'] / r['elapsed_time']))
 
 
-if __name__ == '__main__':
-    count_length('E:/datasets/mimic/mimic_test_512/chunks')
-    # for chunk in tqdm(glob.glob('E:\\datasets\\mimic\\mimic_train_512\\chunks\\chunk*.pkl')):
-    #     mimic_chunk_labels(chunk)
+def coco_labels(dataset_root, split):
+    coco_objects = COCO(f'{dataset_root}/annotations/instances_{split}2017.json')
+    coco_captions = COCO(f'{dataset_root}/annotations/captions_{split}2017.json')
 
+    ids = coco_objects.getImgIds()
+    imgs = coco_objects.loadImgs(ids)
+    data = {'image_id': [], 'image_name': [], 'labels': [], 'captions': []}
+    for i, image in enumerate(tqdm(imgs)):
+        ann = coco_objects.loadAnns(coco_objects.getAnnIds(ids[i]))
+        labels = []
+        for annotation in ann:
+            if annotation['category_id'] not in labels:
+                labels.append(annotation['category_id'])
+
+        data['image_name'].append(image['file_name'])
+        data['image_id'].append(ids[i])
+        data['labels'].append(labels)
+        ann = coco_captions.loadAnns(coco_captions.getAnnIds(ids[i]))
+        texts = [e['caption'] for e in ann]
+        data['captions'].append(texts)
+
+    print(len(data['captions']), len(data['image_id']), len(data['image_name']), len(data['labels']))
+
+
+def coco_results():
+    results = {'model': []}
+    for model in ['dinov2-opt350m', 'dinov3-opt350m', 'openclip-opt350m']:
+        with open(f'checkpoints/{model}/evaluation.json', 'r') as f:
+            model_results = json.load(f)
+            results['model'].append(model)
+            for metric, value in model_results.items():
+                metric = metric.replace('_', '-')
+                if metric not in results.keys():
+                    results[metric] = [value]
+                else:
+                    results[metric].append(value)
+
+    results['encoder size(M)'] = [86.58, 85.66, 303.97]
+
+    df = pd.DataFrame.from_dict(results)
+    df.set_index('model', inplace=True)
+    df.to_latex('evaluation.tex')
+
+
+if __name__ == '__main__':
+    # coco_labels('E:/datasets/coco_2017/', 'train')
+    coco_results()

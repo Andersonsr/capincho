@@ -24,12 +24,17 @@ if __name__ == '__main__':
     parser.add_argument('--patched', action='store_true', default=False, help='whether or not to use patches')
     parser.add_argument('--debug', action='store_true', default=False, help='debugging log')
     parser.add_argument('--dataset_root', type=str,)
+    parser.add_argument('--dim', default=224)
     args = parser.parse_args()
     logger = logging.getLogger('captioning')
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
     model = model_dict[args.model](device)
-    model.load_model()
+    if 'dinov3' in args.model:
+        model.load_model(args.dim)
+    else:
+        model.load_model()
+
     model.backbone.eval()
     coco = COCO(f'{args.dataset_root}/annotations/captions_{args.split}2017.json')
     ids = coco.getImgIds()

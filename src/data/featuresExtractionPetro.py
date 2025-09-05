@@ -44,6 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='debug mode', default=False)
     parser.add_argument('--patched', action='store_true', help='patche images', default=False)
     parser.add_argument('--resize', action='store_true', help='resize images to fit the encoder', default=False)
+    parser.add_argument('--dim', default=224)
     args = parser.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger = logging.getLogger('captioning')
@@ -51,7 +52,11 @@ if __name__ == '__main__':
 
     # model init
     model = model_dict[args.model](device)
-    model.load_model()
+    if 'dinov3' in args.model:
+        model.load_model(args.dim)
+    else:
+        model.load_model()
+
     model.backbone.eval()
 
     dataset_petro = PetroXLSLoader(args.path)

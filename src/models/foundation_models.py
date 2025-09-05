@@ -181,9 +181,9 @@ class OpenCLIP(FoundationModel):
 
 
 class DinoV3(FoundationModel):
-    def load_model(self):
+    def load_model(self, dim=224):
         pretrained_model_name = "facebook/dinov3-vitb16-pretrain-lvd1689m"
-        self.vision_preprocess = AutoImageProcessor.from_pretrained(pretrained_model_name)
+        self.vision_preprocess = AutoImageProcessor.from_pretrained(pretrained_model_name, size={"height": dim, "width": dim})
         self.backbone = AutoModel.from_pretrained(
             pretrained_model_name,
         )
@@ -218,9 +218,9 @@ class DinoV3(FoundationModel):
 
 
 class DinoV3_L(DinoV3):
-    def load_model(self):
+    def load_model(self, dim=224):
         pretrained_model_name = "facebook/dinov3-vitl16-pretrain-lvd1689m"
-        self.vision_preprocess = AutoImageProcessor.from_pretrained(pretrained_model_name)
+        self.vision_preprocess = AutoImageProcessor.from_pretrained(pretrained_model_name, size={"height": dim, "width": dim})
         self.backbone = AutoModel.from_pretrained(
             pretrained_model_name,
         )
@@ -275,12 +275,17 @@ model_dict = {'coca': OpenCoCa,
               'dinov3-L': DinoV3_L}
 
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device( "cpu")
     text = 'texto de teste'
 
     for key in ['dinov2', 'dinov3', 'dinov3-L']:
         model = model_dict[key](device)
-        model.load_model()
+        if 'dinov3' in key:
+            model.load_model(512)
+        else:
+            model.load_model()
+
+        # size
         if 'dino' in key:
             print(key, learnable_parameters(model.backbone))
 

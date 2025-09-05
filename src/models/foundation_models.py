@@ -217,6 +217,16 @@ class DinoV3(FoundationModel):
             return torch.ones((len(text), 768))
 
 
+class DinoV3_L(DinoV3):
+    def load_model(self):
+        pretrained_model_name = "facebook/dinov3-vitl16-pretrain-lvd1689m"
+        self.vision_preprocess = AutoImageProcessor.from_pretrained(pretrained_model_name)
+        self.backbone = AutoModel.from_pretrained(
+            pretrained_model_name,
+        )
+        self.backbone.to(self.device)
+
+
 class DinoV2(FoundationModel):
     def load_model(self):
         model_name = 'facebook/dinov2-base'
@@ -261,14 +271,14 @@ model_dict = {'coca': OpenCoCa,
               'siglip-384': SigLIP_384,
               'siglip-512': SigLIP_512,
               'dinov2': DinoV2,
-              'dinov3': DinoV3}
-
+              'dinov3': DinoV3,
+              'dinov3-L': DinoV3_L}
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text = 'texto de teste'
 
-    for key in ['dinov2', 'dinov3', 'openclip']:
+    for key in ['dinov2', 'dinov3', 'dinov3-L']:
         model = model_dict[key](device)
         model.load_model()
         if 'dino' in key:

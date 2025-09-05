@@ -133,7 +133,12 @@ class Decoder(nn.Module):
             captions = [caption + self.tokenizer.eos_token for caption in captions]
 
         # batch size, patches, model dim
-        b, p, d = embeddings.shape
+        if len(embeddings.shape) == 3:
+            b, p, d = embeddings.shape
+        else:
+            b, d = embeddings.shape
+            p = 1
+
         embeddings = embeddings.view(b*p, 1, d)
 
         prefix_tokens = self.mapper(embeddings).view(-1, self.prefix_length, self.hidden_size)

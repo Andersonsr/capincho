@@ -9,12 +9,6 @@ import matplotlib.pyplot as plt
 import json
 import os
 import sys
-import torch.distributed as dist
-from torch.distributed.fsdp import (
-   FullyShardedDataParallel,
-   CPUOffload,
-)
-from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
 
 # path trick
 path = os.path.normpath(os.path.join(os.path.join(os.path.abspath(__file__)), '..', '..'))
@@ -70,7 +64,7 @@ def prepare_batch(batch, text_only, patch, device, num_descriptions=5, break_lin
 
 def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefix_len, fp, text_only,
           full_finetune, add_noise, variance, save_history, dataset, root, dimension, log_step,
-          normalize, patch, before, break_line, append_eos, fsdp):
+          normalize, patch, before, break_line, append_eos):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info('model device {}'.format(device))
@@ -130,15 +124,6 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
             # create new adapter
             decoder.lora_model(r, alpha, dropout)
             logging.debug('created new adapter')
-
-    if fsdp:
-        # apply warping
-
-        decoder = FullyShardedDataParallel(
-            decoder,
-            auto_wrap_policy=size_based_auto_wrap_policy,
-            cpu_offload=CPUOffload(offload_params=True),
-        )
 
     optim = AdamW(decoder.parameters(), lr=lr)
     logging.debug('DECODER SIZE {}'.format(learnable_parameters(decoder.model)))
@@ -202,8 +187,8 @@ def train(epochs, batch_size, lr, filename, r, alpha, dropout, model_name, prefi
 
                 plt.clf()
                 log = {'training_loss': training_losses, 'validation_loss': validation_losses}
-                with open(f'{root}/loss_log.pkl', 'wb') as f:
-                    pickle.dump(log, f)
+                with open(f'{root}/loss_log.pkl', 'w') as f:
+                    json.dump(log, f)
 
                 decoder.train(True)
                 decoder.add_noise = add_noise
@@ -253,7 +238,6 @@ if __name__ == '__main__':
     parser.add_argument('--break_lines', action='store_true',
                         help='break string separated by new line, and user the first part only', default=False)
     parser.add_argument('--append_eos', action='store_true', default=False, help='append eos to the end of sentence')
-    parser.add_argument('--fsdp', action='store_true', default=False, )
     args = parser.parse_args()
     logger = logging.getLogger('captioning')
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
@@ -279,7 +263,7 @@ if __name__ == '__main__':
     train(args.epochs, args.batch_size, args.lr, args.embeddings, args.rank, args.alpha, args.dropout,
           args.model_name, args.prefix_len, precision, args.text_only, args.full_finetune,
           args.noise, args.variance, args.history, args.dataset, args.save_path, args.dimension, args.log_step,
-          args.normalize, args.patched, args.before, args.break_lines, args.append_eos, args.fsdp)
+          args.normalize, args.patched, args.before, args.break_lines, args.append_eos)
 
     result_dict = args.__dict__
     result_dict['checkpoint_path'] = os.path.join(args.save_path, 'checkpoint.pt')

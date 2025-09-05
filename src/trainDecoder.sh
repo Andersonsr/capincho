@@ -7,9 +7,8 @@ python train/trainDecoder.py \
     --normalize \
     --append_eos \
     --dataset coco \
-    --save_path checkpoints/dinov3-opt350m \
+    --save_path checkpoints/test\
     --model_name facebook/opt-350m \
-    --fsdp
 #    --model_name meta-llama/Llama-3.2-1B
 
 

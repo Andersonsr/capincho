@@ -15,7 +15,6 @@ sys.path.append(path)
 from models.foundation_models import model_dict
 
 
-
 class PetroXLSLoader(Dataset):
     def __init__(self,filepath):
         assert os.path.exists(filepath)
@@ -67,11 +66,13 @@ if __name__ == '__main__':
     if args.patched:
         data['patch_embeddings'] = []
 
-    loader = dataset_petro.get_loader()
+    loader = dataset_petro.get_loader(16)
     # extraction loop
     for batch in tqdm(loader):
-        id = batch['cd_guid']
-        img_path = f'{args.root}/{id}.png'
+        img_path = []
+        for id in batch['cd_guid']:
+            img_path.append(f'{args.root}/{id}.png')
+
         vis_embed = model.visual_embedding(img_path, args.resize)
         txt_embed = model.language_embedding(batch['text'])
         data['text_embeddings'] += txt_embed.detach().cpu()
@@ -81,8 +82,8 @@ if __name__ == '__main__':
         logging.debug(f'text embeddings shape: {txt_embed.shape}')
 
     logging.debug(f'caption sample {data["captions"][0]}')
-    data['image_embeddings'] = torch.cat(data['image_embeddings']).unsqueeze(dim=1)
-    data['text_embeddings'] = torch.cat(data['text_embeddings']).unsqueeze(dim=1)
+    data['image_embeddings'] = torch.stack(data['image_embeddings']).unsqueeze(dim=1)
+    data['text_embeddings'] = torch.stack(data['text_embeddings']).unsqueeze(dim=1)
     with open(args.output, 'wb') as f:
         pickle.dump(data, f)
 
